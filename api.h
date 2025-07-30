@@ -1,5 +1,6 @@
 #ifndef API_H
 #define API_H
+
 #include <infiniband/verbs.h>
 #include <stdint.h>
 
@@ -47,16 +48,9 @@ typedef struct {
     rdma_connection_t left_neighbor;   // Connection to left neighbor in ring
     rdma_connection_t right_neighbor;  // Connection to right neighbor in ring
     
-    // Working buffers for operations
-    void *work_buffer;              // Working buffer for intermediate results
-    size_t work_buffer_size;        // Size of working buffer
-    
     // Synchronization and state
     int initialized;                // Flag to check if properly initialized
     
-    // For pipelining (advanced feature)
-    size_t chunk_size;              // Size of chunks for pipelined operations
-    int pipelining_enabled;         // Flag for pipelining feature
     
 } pg_handle;
 
