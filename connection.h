@@ -6,14 +6,6 @@
 #define MAX_RETRIES 100
 #define RETRY_DELAY_MS 100
 
-// Structure to exchange RDMA connection info via TCP
-typedef struct {
-    uint32_t qpn;           // Queue Pair Number
-    uint16_t lid;           // Local Identifier
-    union ibv_gid gid;      // Global Identifier
-    uint64_t addr;          // Memory address
-    uint32_t rkey;          // Remote key
-} rdma_conn_info_t;
 
 // Helper function prototypes
 int connect_process_group(char *server_list, void **pg_handle_ptr)
