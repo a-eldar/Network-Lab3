@@ -250,98 +250,33 @@ static int create_queue_pairs(pg_handle *handle) {
     return 0;
 }
 
+
 static int establish_tcp_connections(pg_handle *handle) {
     int listen_sock = -1;
     int left_sock = -1, right_sock = -1;
     struct sockaddr_in addr;
     
     // Create listening socket
-    listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+    listen_sock = create_listening_socket();
     if (listen_sock < 0) {
-        perror("socket");
+        fprintf(stderr, "Failed to create listening socket\n");
         return -1;
     }
-
-    int opt = 1;
-    setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
-    // Bind to port
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(TCP_PORT_BASE + handle->rank);
-
-    if (bind(listen_sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        perror("bind");
+    if(setup_listening_socket(listen_sock, handle->rank, &addr)){
+        fprintf(stderr, "Failed to setup listening socket\n");
         close(listen_sock);
         return -1;
     }
-
-    if (listen(listen_sock, 2) < 0) {
-        perror("listen");
-        close(listen_sock);
-        return -1;
-    }
-
-    // Set non-blocking
-    fcntl(listen_sock, F_SETFL, O_NONBLOCK);
-
-    printf("Listening on port %d\n", TCP_PORT_BASE + handle->rank);
 
     // Connect to right neighbor and accept from left neighbor
-    int left_rank = (handle->rank - 1 + handle->num_processes) % handle->num_processes;
-    int right_rank = (handle->rank + 1) % handle->num_processes;
-
-    // Try to connect to right neighbor and accept from left neighbor
-    for (int retry = 0; retry < MAX_RETRIES && (left_sock < 0 || right_sock < 0); retry++) {
-        // Try to accept connection from left neighbor
-        if (left_sock < 0) {
-            left_sock = accept(listen_sock, NULL, NULL);
-            if (left_sock >= 0) {
-                printf("Accepted connection from left neighbor (rank %d)\n", left_rank);
-            }
-        }
-
-        // Try to connect to right neighbor
-        if (right_sock < 0) {
-            right_sock = socket(AF_INET, SOCK_STREAM, 0);
-            if (right_sock >= 0) {
-                struct sockaddr_in right_addr;
-                memset(&right_addr, 0, sizeof(right_addr));
-                right_addr.sin_family = AF_INET;
-                right_addr.sin_port = htons(TCP_PORT_BASE + right_rank);
-
-                // Resolve hostname
-                struct hostent *he = gethostbyname(handle->server_names[right_rank]);
-                if (he) {
-                    memcpy(&right_addr.sin_addr, he->h_addr_list[0], he->h_length);
-                    
-                    if (connect(right_sock, (struct sockaddr*)&right_addr, sizeof(right_addr)) == 0) {
-                        printf("Connected to right neighbor (rank %d)\n", right_rank);
-                    } else {
-                        close(right_sock);
-                        right_sock = -1;
-                    }
-                } else {
-                    close(right_sock);
-                    right_sock = -1;
-                }
-            }
-        }
-
-        if (left_sock < 0 || right_sock < 0) {
-            usleep(RETRY_DELAY_MS * 1000);
-        }
+    if (connect_left_and_right_neighbors(handle, listen_sock, &left_sock, &right_sock) != 0) {
+        fprintf(stderr, "Failed to connect to neighbors\n");
+        close(listen_sock);
+        return -1;
     }
 
     close(listen_sock);
 
-    if (left_sock < 0 || right_sock < 0) {
-        fprintf(stderr, "Failed to establish TCP connections\n");
-        if (left_sock >= 0) close(left_sock);
-        if (right_sock >= 0) close(right_sock);
-        return -1;
-    }
 
     // Store sockets temporarily (we'll close them after exchanging info)
     handle->left_neighbor.qp->qp_context = (void*)(intptr_t)left_sock;
@@ -520,4 +455,96 @@ static void cleanup_on_error(pg_handle *handle) {
     if (handle->my_hostname) free(handle->my_hostname);
     
     free(handle);
+}
+
+
+static int create_listening_socket(void) {
+    int listen_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (listen_sock < 0) {
+        perror("socket");
+        return -1;
+    }
+
+    int opt = 1;
+    setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    return listen_sock;
+}
+
+static int setup_listening_socket(int listen_sock, int rank, struct sockaddr_in *addr) {
+    // Bind to port
+    memset(addr, 0, sizeof(*addr));
+    addr->sin_addr.s_addr = INADDR_ANY;
+    addr->sin_family = AF_INET;
+    addr->sin_port = htons(TCP_PORT_BASE + handle->rank);
+
+    if (bind(listen_sock, (struct sockaddr*)addr, sizeof(*addr)) < 0) {
+        perror("bind");
+        return -1;
+    }
+
+    if (listen(listen_sock, 2) < 0) {
+        perror("listen");
+        return -1;
+    }
+
+    // Set non-blocking
+    fcntl(listen_sock, F_SETFL, O_NONBLOCK);
+
+    printf("Listening on port %d\n", TCP_PORT_BASE + rank);
+    return 0;
+
+}
+
+static int connect_left_and_right_neighbors(pg_handle *handle, int listen_sock, int *left_sock, int *right_sock) {
+    int left_rank = (handle->rank - 1 + handle->num_processes) % handle->num_processes;
+    int right_rank = (handle->rank + 1) % handle->num_processes;
+
+    // Try to connect to right neighbor and accept from left neighbor
+    for (int retry = 0; retry < MAX_RETRIES && (*left_sock < 0 || *right_sock < 0); retry++) {
+        // Try to accept connection from left neighbor
+        if (*left_sock < 0) {
+            *left_sock = accept(listen_sock, NULL, NULL);
+            if (*left_sock >= 0) {
+                printf("Accepted connection from left neighbor (rank %d)\n", left_rank);
+            }
+        }
+
+        // Try to connect to right neighbor
+        if (*right_sock < 0) {
+            *right_sock = socket(AF_INET, SOCK_STREAM, 0);
+            if (*right_sock >= 0) {
+                struct sockaddr_in right_addr;
+                memset(&right_addr, 0, sizeof(right_addr));
+                right_addr.sin_family = AF_INET;
+                right_addr.sin_port = htons(TCP_PORT_BASE + right_rank);
+
+                // Resolve hostname
+                struct hostent *he = gethostbyname(handle->server_names[right_rank]);
+                if (he) {
+                    memcpy(&right_addr.sin_addr, he->h_addr_list[0], he->h_length);
+                    
+                    if (connect(*right_sock, (struct sockaddr*)&right_addr, sizeof(right_addr)) == 0) {
+                        printf("Connected to right neighbor (rank %d)\n", right_rank);
+                    } else {
+                        close(*right_sock);
+                        *right_sock = -1;
+                    }
+                } else {
+                    close(*right_sock);
+                    *right_sock = -1;
+                }
+            }
+        }
+
+        if (*left_sock < 0 || *right_sock < 0) {
+            usleep(RETRY_DELAY_MS * 1000);
+        }
+    }
+    if (*left_sock < 0 || *right_sock < 0) {
+        fprintf(stderr, "Failed to establish TCP connections\n");
+        if (left_sock >= 0) close(left_sock);
+        if (right_sock >= 0) close(right_sock);
+        return -1;
+    }
+    return 0;
 }

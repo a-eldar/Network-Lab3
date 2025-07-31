@@ -27,4 +27,6 @@ static int exchange_rdma_info_tcp(pg_handle *handle);
 static int connect_qps(pg_handle *handle);
 static void cleanup_on_error(pg_handle *handle);
 
+static int create_listening_socket(void);
+
 #endif // CONNECTION_H
