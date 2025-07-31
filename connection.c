@@ -301,7 +301,7 @@ static int exchange_rdma_info_tcp(pg_handle *handle) {
     }
 
     // Prepare connection info for left neighbor
-    rdma_connection_t left_info = {0};
+    rdma_conn_info_t left_info = {0};
     left_info.qpn = handle->left_neighbor.qp->qp_num;
     left_info.lid = port_attr.lid;
     left_info.gid = local_gid;
@@ -309,7 +309,7 @@ static int exchange_rdma_info_tcp(pg_handle *handle) {
     left_info.rkey = handle->left_neighbor.local_mr->rkey;
 
     // Prepare connection info for right neighbor  
-    rdma_connection_t right_info = {0};
+    rdma_conn_info_t right_info = {0};
     right_info.qpn = handle->right_neighbor.qp->qp_num;
     right_info.lid = port_attr.lid;
     right_info.gid = local_gid;
@@ -321,7 +321,7 @@ static int exchange_rdma_info_tcp(pg_handle *handle) {
     int right_sock = (int)(intptr_t)handle->right_neighbor.qp->qp_context;
 
     // Exchange with left neighbor
-    rdma_connection_t left_remote_info;
+    rdma_conn_info_t left_remote_info;
     if (send(left_sock, &left_info, sizeof(left_info), 0) != sizeof(left_info) ||
         recv(left_sock, &left_remote_info, sizeof(left_remote_info), MSG_WAITALL) != sizeof(left_remote_info)) {
         fprintf(stderr, "Failed to exchange info with left neighbor\n");
@@ -329,7 +329,7 @@ static int exchange_rdma_info_tcp(pg_handle *handle) {
     }
 
     // Exchange with right neighbor
-    rdma_connection_t right_remote_info;
+    rdma_conn_info_t right_remote_info;
     if (send(right_sock, &right_info, sizeof(right_info), 0) != sizeof(right_info) ||
         recv(right_sock, &right_remote_info, sizeof(right_remote_info), MSG_WAITALL) != sizeof(right_remote_info)) {
         fprintf(stderr, "Failed to exchange info with right neighbor\n");

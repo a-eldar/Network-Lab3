@@ -31,11 +31,11 @@ typedef struct {
     struct ibv_qp *qp;              // Queue Pair for RDMA operations
     struct ibv_mr *local_mr;        // Memory Region for local buffer
     struct ibv_mr *remote_mr;       // Memory Region information from remote
-    uint32_t qpn;            // Remote Queue Pair Number
-    uint16_t lid;            // Remote Local Identifier
-    union ibv_gid gid;       // Remote Global Identifier
-    uint64_t addr;           // Remote memory address
-    uint32_t rkey;           // Remote key for memory access
+    uint32_t remote_qpn;            // Remote Queue Pair Number
+    uint16_t remote_lid;            // Remote Local Identifier
+    union ibv_gid remote_gid;       // Remote Global Identifier
+    uint64_t remote_addr;           // Remote memory address
+    uint32_t remote_rkey;           // Remote key for memory access
     void *local_buffer;             // Local buffer for data
     size_t buffer_size;             // Size of the buffer
 } rdma_connection_t;
