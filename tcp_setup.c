@@ -139,12 +139,14 @@ int exchange_rdma_info(PGHandle *pg_handle, char **serverlist, int len, int idx)
         // First server: send to left (last server), then listen for right
         
         // Connect to left neighbor and send our info
-        pg_handle->tcp_client_fd = connect_tcp_client(serverlist[left_idx], 
-                                                     DEFAULT_TCP_PORT + left_idx);
-        if (pg_handle->tcp_client_fd < 0) {
-            fprintf(stderr, "Failed to connect to left neighbor\n");
-            return -1;
-        }
+        do{
+            pg_handle->tcp_client_fd = connect_tcp_client(serverlist[left_idx], 
+                                                        DEFAULT_TCP_PORT + left_idx);
+        } while (pg_handle->tcp_client_fd < 0);
+        // if (pg_handle->tcp_client_fd < 0) {
+        //     fprintf(stderr, "Failed to connect to left neighbor\n");
+        //     return -1;
+        // }
         
         if (send_rdma_info(pg_handle->tcp_client_fd, &pg_handle->right_conn) != 0) {
             fprintf(stderr, "Failed to send RDMA info to left neighbor\n");
