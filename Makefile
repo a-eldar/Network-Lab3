@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c23
+CFLAGS = -Wall -Wextra
 LDFLAGS = -libverbs
 
 # Source files
