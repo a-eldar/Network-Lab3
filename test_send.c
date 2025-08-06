@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
         print_array(sendbuf_int, count, "Send buffer (INT)");
         // send data
         printf("Rank 0 sending buffer to rank 1.\n");
-        post_send(&pg_handle.right_neighbor, sendbuf_int, count * sizeof(int));
+        ibv_post_send(&pg_handle.right_neighbor, sendbuf_int, count * sizeof(int));
     }
     else {
         // Rank 1 receives data
