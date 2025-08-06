@@ -63,7 +63,25 @@ int main(int argc, char* argv[]) {
         print_array(sendbuf_int, count, "Send buffer (INT)");
         // send data
         printf("Rank 0 sending buffer to rank 1.\n");
-        ibv_post_send(&pg_handle.right_neighbor, sendbuf_int, count * sizeof(int));
+        struct ibv_sge sge = {
+            .addr = (uintptr_t)sendbuf_int,
+            .length = count * sizeof(int),
+            .lkey = pg_handle.right_neighbor.mr->lkey
+        };
+        
+        struct ibv_send_wr wr = {
+            .wr_id = SEND_WRID,
+            .sg_list = &sge,
+            .num_sge = 1,
+            .opcode = IBV_WR_SEND,
+            .send_flags = IBV_SEND_SIGNALED,
+            .next = NULL
+        };
+        
+        struct ibv_send_wr *bad_wr;
+        if (ibv_post_send(pg_handle.right_neighbor.qp, &wr, &bad_wr)) {
+            fprintf(stderr, "Failed to post send\n");
+        }
     }
     else {
         // Rank 1 receives data
