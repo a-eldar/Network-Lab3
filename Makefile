@@ -36,6 +36,6 @@ deps:
 	@echo "  - RDMA/InfiniBand hardware or software simulation"
 
 test_send: test_send.c $(OBJECTS)
-	$(CC) $(CFLAGS) -o test_send test_send.c $(LDFLAGS) $(OBJECTS)
+	$(CC) $(CFLAGS) -o test_send test_send.c $(LDFLAGS) $(OBJECTS) $(LDFLAGS)
 
 .PHONY: all clean rebuild deps
