@@ -1,13 +1,16 @@
-#include "tcp_exchange.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+
+#include <sys/types.h>
 #include <sys/socket.h>
-#include <netdb.h>
-#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netdb.h>           // struct addrinfo
+#include <arpa/inet.h>       // inet_ntop
 #include <time.h>
-#include <netdb.h> 
+
+#include "tcp_exchange.h"
 
 int resolve_hostname_to_ip(const char *hostname, char *ip_str, size_t ip_str_size) {
     struct addrinfo hints, *result;
