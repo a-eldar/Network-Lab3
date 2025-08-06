@@ -1,41 +1,38 @@
-# Simple Makefile for RDMA Ring All-Reduce
-
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -O2 -g
-LIBS = -libverbs
+CFLAGS = -Wall -Wextra -std=c99 -g -O2
+LDFLAGS = -libverbs
 
 # Source files
-SOURCES = main_api.c rdma_connection.c tcp_setup.c ring_algorithm.c utility.c
-HEADER = rdma_allreduce.h
+SOURCES = pg_main.c rdma_utils.c tcp_exchange.c ring_allreduce.c
+HEADERS = pg_handle.h rdma_utils.h tcp_exchange.h ring_allreduce.h
+OBJECTS = $(SOURCES:.c=.o)
 
-# Example program
-EXAMPLE = example_allreduce
-EXAMPLE_SRC = example.c
+# Target executable (example/test program)
+TARGET = test_pg
+TEST_SOURCE = test_program.c
 
 # Default target
-all: $(EXAMPLE)
+all: $(TARGET)
 
-# Build example program with all source files
-$(EXAMPLE): $(SOURCES) $(EXAMPLE_SRC) $(HEADER)
-	$(CC) $(CFLAGS) -o $@ $(SOURCES) $(EXAMPLE_SRC) $(LIBS)
-	@echo "Example program created: $(EXAMPLE)"
+# Build the test program
+$(TARGET): $(OBJECTS) $(TEST_SOURCE)
+	$(CC) $(CFLAGS) -o $@ $(TEST_SOURCE) $(OBJECTS) $(LDFLAGS)
 
-# Clean target
+# Build object files
+%.o: %.c $(HEADERS)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Clean build artifacts
 clean:
-	rm -f $(EXAMPLE)
-	@echo "Cleaned build artifacts"
+	rm -f $(OBJECTS) $(TARGET)
 
-# Help target
-help:
-	@echo "Available targets:"
-	@echo "  all   - Build example program"
-	@echo "  clean - Remove build artifacts"
-	@echo "  help  - Show this help message"
+# Rebuild everything
+rebuild: clean all
 
-# Test run instructions
-test: $(EXAMPLE)
-	@echo "Program built successfully!"
-	@echo "Usage: ./$(EXAMPLE) <server1> <server2> ... <serverN> <my_index>"
-	@echo "Example: ./$(EXAMPLE) node1 node2 node3 0"
+# Install dependencies info (for reference)
+deps:
+	@echo "Dependencies required:"
+	@echo "  - libibverbs-dev (Ubuntu/Debian) or libibverbs-devel (RHEL/CentOS)"
+	@echo "  - RDMA/InfiniBand hardware or software simulation"
 
-.PHONY: all clean help test
+.PHONY: all clean rebuild deps
