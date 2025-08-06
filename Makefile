@@ -1,7 +1,7 @@
 # Simple Makefile for RDMA Ring All-Reduce
 
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99 -O2 -g
+CFLAGS = -Wall -Wextra
 LIBS = -libverbs
 
 # Source files
