@@ -234,31 +234,14 @@ int post_send(struct neighbor_connection *conn, int size) {
     return ibv_post_send(conn->qp, &wr, &bad_wr);
 }
 
-int wait_for_completion(struct neighbor_connection *conn, int expected_completions) {
-    int completed = 0;
-    
-    while (completed < expected_completions) {
-        struct ibv_wc wc[WC_BATCH];
-        int ne, i;
-        
-        do {
-            ne = ibv_poll_cq(conn->cq, WC_BATCH, wc);
-            if (ne < 0) {
-                fprintf(stderr, "Failed to poll CQ\n");
-                return -1;
-            }
-        } while (ne < 1);
-        
-        for (i = 0; i < ne; ++i) {
-            if (wc[i].status != IBV_WC_SUCCESS) {
-                fprintf(stderr, "Work completion failed: %s\n", 
-                       ibv_wc_status_str(wc[i].status));
-                return -1;
-            }
-            completed++;
-        }
+int wait_for_completion(struct neighbor_connection *conn) {
+
+    struct ibv_wc wc;
+    while (!ibv_poll_cq(conn->cq, 1, &wc)) {}
+    if (wc.status != IBV_WC_SUCCESS) {
+        fprintf(stderr, "Completion error: %s\n", ibv_wc_status_str(wc.status));
+        return -1;
     }
-    
     return 0;
 }
 

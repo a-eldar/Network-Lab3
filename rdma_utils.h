@@ -38,7 +38,7 @@ int connect_qp(struct neighbor_connection *conn, int ib_port, int my_psn,
                struct connection_dest *dest, int gidx);
 int post_recv(struct neighbor_connection *conn);
 int post_send(struct neighbor_connection *conn, int size);
-int wait_for_completion(struct neighbor_connection *conn, int expected_completions);
+int wait_for_completion(struct neighbor_connection *conn);
 int cleanup_neighbor_connection(struct neighbor_connection *conn);
 
 #endif // RDMA_UTILS_H
