@@ -2,6 +2,9 @@
 #define TCP_EXCHANGE_H
 
 #include "rdma_utils.h"
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 // TCP exchange functions
 struct connection_dest* exchange_with_left(const char *left_server, int tcp_port, 
