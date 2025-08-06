@@ -1,3 +1,5 @@
+> [!description]
+> Here we will format the instructions for the exercise to deliver to an AI model
 
 We are making a **C** library for **All Reduce** using the **Ring** algorithm, over **RDMA**.
 
@@ -21,7 +23,7 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
 - `pg_handle` - an empty `PGHandle` struct to fill with the relevant information.
 - Returns: 0 on success, -1 on failure
 
-This function connects each of the servers to their two neighbors in the list over RDMA. Each server should write to the server on its right and read from the output of the server on its left. Remember that in RDMA we use one-sided **write**.
+This function connects each of the servers to their two neighbors in the list over RDMA. Each server should write to the server on its right and read from the output of the server on its left.
 In order to establish the connection, each server should send the relevant information to the neighbor on its left, using TCP, in order for it to know where to write to and establish its connection.
 
 In TCP part we need the first server (index 0) to send the relevant information to its left, and then listen for incoming information from the its right. The rest of the servers should do the opposite, first listening and then sending. This is done in order to prevent a deadlock.
