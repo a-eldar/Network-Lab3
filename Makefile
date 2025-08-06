@@ -35,4 +35,7 @@ deps:
 	@echo "  - libibverbs-dev (Ubuntu/Debian) or libibverbs-devel (RHEL/CentOS)"
 	@echo "  - RDMA/InfiniBand hardware or software simulation"
 
+test_send: test_send.c $(OBJECTS)
+	$(CC) $(CFLAGS) -o test_send test_send.c $(LDFLAGS)
+
 .PHONY: all clean rebuild deps
