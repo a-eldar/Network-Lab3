@@ -7,6 +7,7 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <time.h>
+#include <netdb.h> 
 
 int resolve_hostname_to_ip(const char *hostname, char *ip_str, size_t ip_str_size) {
     struct addrinfo hints, *result;
