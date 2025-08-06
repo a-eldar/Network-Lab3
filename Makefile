@@ -16,7 +16,7 @@ all: $(TARGET)
 
 # Build the test program
 $(TARGET): $(OBJECTS) $(TEST_SOURCE)
-	$(CC) $(CFLAGS) -o $@ $(TEST_SOURCE) $(OBJECTS) $(LDLIBS)
+	$(CC) $(CFLAGS) -o $@ $(TEST_SOURCE) $(OBJECTS) $(LDFLAGS)
 
 # Build object files
 %.o: %.c $(HEADERS)
