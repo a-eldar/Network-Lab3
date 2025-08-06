@@ -3,6 +3,9 @@
 
 #include <infiniband/verbs.h>
 #include <stdint.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
 
 typedef enum {
     INT, DOUBLE
