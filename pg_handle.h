@@ -4,6 +4,7 @@
 #include <infiniband/verbs.h>
 #include <stdint.h>
 
+
 typedef enum {
     INT, DOUBLE
 } DATATYPE;
