@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -std=c99
-LDLIBS = -libverbs
+CFLAGS = -Wall -Wextra -std=c23
+LDFLAGS = -libverbs
 
 # Source files
 SOURCES = pg_main.c rdma_utils.c tcp_exchange.c ring_allreduce.c
