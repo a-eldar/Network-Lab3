@@ -12,6 +12,8 @@ We need to implement 3 functions in our library.
 
 > [!Notice]
 > Make sure you implement them in a modular way, and use helper functions to make it more readable as well.
+> Separate the library into different C files with designated header files.
+> Make a **simple** Makefile using `libverbs`. **Don't** make it a static or shared library.
 
 ## Connect Process Group
 ```c
@@ -24,9 +26,13 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
 - Returns: 0 on success, -1 on failure
 
 This function connects each of the servers to their two neighbors in the list over RDMA. Each server should write to the server on its right and read from the output of the server on its left.
-In order to establish the connection, each server should send the relevant information to the neighbor on its left, using TCP, in order for it to know where to write to and establish its connection.
+The connection information is exchanged using TCP sockets.
 
 In TCP part we need the first server (index 0) to send the relevant information to its left, and then listen for incoming information from the its right. The rest of the servers should do the opposite, first listening and then sending. This is done in order to prevent a deadlock.
+Then we do the same thing but in the other direction. The first server sends the relevant information to its right neighbor and then listens for incoming information from its left. The rest, again, do the opposite, first listening and then sending.
+
+> [!attention]
+> In the TCP part, make sure that the first server repetitively sends its information to its neighbor, in order to allow for the servers to connect asynchronously
 
 ## All Reduce
 ```c
