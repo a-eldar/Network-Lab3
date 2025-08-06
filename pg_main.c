@@ -163,8 +163,7 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
     pg_handle->left_neighbor.psn = left_dest->psn;
     pg_handle->left_neighbor.gid = left_dest->gid;
     // ---------DEBUG---------
-    printf("Rank %d: Left neighbor connected: LID: %04x, Q
-PN: %06x, PSN: %06x\n", 
+    printf("Rank %d: Left neighbor connected: LID: %04x, QPN: %06x, PSN: %06x\n", 
            idx, pg_handle->left_neighbor.lid, pg_handle->left_neighbor.qpn, pg_handle->left_neighbor.psn);
     // ------------------------
     
