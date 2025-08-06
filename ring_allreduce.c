@@ -121,7 +121,7 @@ int perform_ring_allreduce(void* sendbuf, void* recvbuf, int count,
         }
         
         // Wait for send completion
-        if (wait_for_completion(&pg_handle->right_neighbor, 1)) {
+        if (wait_for_completion(&pg_handle->right_neighbor)) {
             fprintf(stderr, "Failed to wait for send completion in reduce-scatter step %d\n", step);
             free(send_chunk);
             free(recv_chunk);
@@ -130,7 +130,7 @@ int perform_ring_allreduce(void* sendbuf, void* recvbuf, int count,
         
         // Wait for receive completion and perform reduction (except in last step)
         if (step < pg_handle->size - 1) {
-            if (wait_for_completion(&pg_handle->left_neighbor, 1)) {
+            if (wait_for_completion(&pg_handle->left_neighbor)) {
                 fprintf(stderr, "Failed to wait for receive completion in reduce-scatter step %d\n", step);
                 free(send_chunk);
                 free(recv_chunk);
@@ -173,7 +173,7 @@ int perform_ring_allreduce(void* sendbuf, void* recvbuf, int count,
         }
         
         // Wait for send completion
-        if (wait_for_completion(&pg_handle->right_neighbor, 1)) {
+        if (wait_for_completion(&pg_handle->right_neighbor)) {
             fprintf(stderr, "Failed to wait for send completion in allgather step %d\n", step);
             free(send_chunk);
             free(recv_chunk);
@@ -181,7 +181,7 @@ int perform_ring_allreduce(void* sendbuf, void* recvbuf, int count,
         }
         
         // Wait for receive completion and copy data
-        if (wait_for_completion(&pg_handle->left_neighbor, 1)) {
+        if (wait_for_completion(&pg_handle->left_neighbor)) {
             fprintf(stderr, "Failed to wait for receive completion in allgather step %d\n", step);
             free(send_chunk);
             free(recv_chunk);
