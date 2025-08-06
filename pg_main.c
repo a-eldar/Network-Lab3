@@ -94,12 +94,20 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
     my_left_dest.qpn = pg_handle->left_neighbor.qp->qp_num;
     my_left_dest.psn = lrand48() & 0xffffff;
     memset(&my_left_dest.gid, 0, sizeof(my_left_dest.gid));
+    // ---------DEBUG---------
+    printf("Rank %d: Left neighbor LID: %04x, QPN: %06x, PSN: %06x\n", 
+           idx, my_left_dest.lid, my_left_dest.qpn, my_left_dest.psn);
+    // ------------------------
     
     my_right_dest.lid = port_attr.lid;
     my_right_dest.qpn = pg_handle->right_neighbor.qp->qp_num;  
     my_right_dest.psn = lrand48() & 0xffffff;
     memset(&my_right_dest.gid, 0, sizeof(my_right_dest.gid));
-    
+    // ---------DEBUG---------
+    printf("Rank %d: Right neighbor LID: %04x, QPN: %06x, PSN: %06x\n", 
+           idx, my_right_dest.lid, my_right_dest.qpn, my_right_dest.psn);
+    // ------------------------
+
     // Calculate neighbor indices
     int left_idx = (idx - 1 + len) % len;
     int right_idx = (idx + 1) % len;
@@ -154,11 +162,20 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
     pg_handle->left_neighbor.qpn = left_dest->qpn;
     pg_handle->left_neighbor.psn = left_dest->psn;
     pg_handle->left_neighbor.gid = left_dest->gid;
+    // ---------DEBUG---------
+    printf("Rank %d: Left neighbor connected: LID: %04x, Q
+PN: %06x, PSN: %06x\n", 
+           idx, pg_handle->left_neighbor.lid, pg_handle->left_neighbor.qpn, pg_handle->left_neighbor.psn);
+    // ------------------------
     
     pg_handle->right_neighbor.lid = right_dest->lid;
     pg_handle->right_neighbor.qpn = right_dest->qpn;
     pg_handle->right_neighbor.psn = right_dest->psn;
     pg_handle->right_neighbor.gid = right_dest->gid;
+    // ---------DEBUG---------
+    printf("Rank %d: Right neighbor connected: LID: %04x, QPN: %06x, PSN: %06x\n", 
+           idx, pg_handle->right_neighbor.lid, pg_handle->right_neighbor.qpn, pg_handle->right_neighbor.psn);
+    // ------------------------
     
     // Connect QPs
     if (connect_qp(&pg_handle->left_neighbor, pg_handle->ib_port, 
