@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c99 -g -O2
-LDLIBS = -libverbs
+LDFLAGS = -libverbs
 
 # Source files
 SOURCES = pg_main.c rdma_utils.c tcp_exchange.c ring_allreduce.c
@@ -16,7 +16,7 @@ all: $(TARGET)
 
 # Build the test program
 $(TARGET): $(OBJECTS) $(TEST_SOURCE)
-	$(CC) $(CFLAGS) -o $@ $(TEST_SOURCE) $(OBJECTS) $(LDLIBS)
+	$(CC) $(CFLAGS) -o $@ $(TEST_SOURCE) $(OBJECTS) $(LDFLAGS)
 
 # Build object files
 %.o: %.c $(HEADERS)
