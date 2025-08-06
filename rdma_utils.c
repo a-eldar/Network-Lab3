@@ -181,7 +181,7 @@ int connect_qp(struct neighbor_connection *conn, int ib_port, int my_psn,
     // Modify QP to RTS
     attr.qp_state = IBV_QPS_RTS;
     attr.timeout = 14;
-    attr.retry_cnt = 7;
+    attr.retry_cnt = 100;
     attr.rnr_retry = 7;
     attr.sq_psn = my_psn;
     attr.max_rd_atomic = 1;
