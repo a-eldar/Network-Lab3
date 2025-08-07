@@ -1,41 +1,5 @@
-CC = gcc
-CFLAGS = -Wall -Wextra
-LDFLAGS = -libverbs
-
-# Source files
-SOURCES = pg_main.c rdma_utils.c tcp_exchange.c ring_allreduce.c
-HEADERS = pg_handle.h rdma_utils.h tcp_exchange.h ring_allreduce.h
-OBJECTS = $(SOURCES:.c=.o)
-
-# Target executable (example/test program)
-TARGET = test_pg
-TEST_SOURCE = test_program.c
-
-# Default target
-all: $(TARGET)
-
-# Build the test program
-$(TARGET): $(OBJECTS) $(TEST_SOURCE)
-	$(CC) $(CFLAGS) -o $@ $(TEST_SOURCE) $(OBJECTS) $(LDFLAGS)
-
-# Build object files
-%.o: %.c $(HEADERS)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-# Clean build artifacts
-clean:
-	rm -f $(OBJECTS) $(TARGET)
-
-# Rebuild everything
-rebuild: clean all
-
-# Install dependencies info (for reference)
-deps:
-	@echo "Dependencies required:"
-	@echo "  - libibverbs-dev (Ubuntu/Debian) or libibverbs-devel (RHEL/CentOS)"
-	@echo "  - RDMA/InfiniBand hardware or software simulation"
-
-test_send: test_send.c $(OBJECTS)
-	$(CC) $(CFLAGS) -o test_send test_send.c $(LDFLAGS) $(OBJECTS) $(LDFLAGS)
-
-.PHONY: all clean rebuild deps
+all:
+	rm -f all_reduce_ring
+	gcc all_reduce_ring.c rdma_utils.c -libverbs -o all_reduce_ring -lm
+tar:
+	tar -cvzf 303062087_207129420.tgz Makefile all_reduce_ring.c all_reduce_ring.h rdma_utils.c rdma_utils.h
