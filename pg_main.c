@@ -26,7 +26,7 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
     pg_handle->page_size = sysconf(_SC_PAGESIZE);
     
     // Copy server list
-    pg_handle->serverlist = malloc(len * sizeof(char*));
+    pg_handle->serverlist = calloc(len, sizeof(char*));
     if (!pg_handle->serverlist) {
         fprintf(stderr, "Failed to allocate memory for server list\n");
         return -1;
@@ -81,6 +81,10 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
     // Prepare connection destinations
     struct connection_dest my_left_dest, my_right_dest;
     struct ibv_port_attr port_attr;
+    
+    memset(&my_left_dest, 0, sizeof(my_left_dest));
+    memset(&my_right_dest, 0, sizeof(my_right_dest));
+
     
     if (get_port_info(pg_handle->left_neighbor.context, pg_handle->ib_port, &port_attr) != 0) {
         fprintf(stderr, "Failed to get port info\n");

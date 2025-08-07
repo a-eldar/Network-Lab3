@@ -113,6 +113,7 @@ struct connection_dest* exchange_with_left(const char *left_server, int tcp_port
         close(sockfd);
         return NULL;
     }
+    memset(rem_dest, 0, sizeof(*rem_dest));
     
     sscanf(msg, "%x:%x:%x:%s", &rem_dest->lid, &rem_dest->qpn, &rem_dest->psn, gid);
     wire_gid_to_gid(gid, &rem_dest->gid);
@@ -194,6 +195,7 @@ struct connection_dest* exchange_with_right(int tcp_port, const struct connectio
         close(connfd);
         return NULL;
     }
+    memset(rem_dest, 0, sizeof(*rem_dest));
     
     sscanf(msg, "%x:%x:%x:%s", &rem_dest->lid, &rem_dest->qpn, &rem_dest->psn, gid);
     wire_gid_to_gid(gid, &rem_dest->gid);

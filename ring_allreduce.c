@@ -87,6 +87,8 @@ int perform_ring_allreduce(void* sendbuf, void* recvbuf, int count,
         free(recv_chunk);
         return -1;
     }
+    memset(send_chunk, 0, pg_handle->max_buffer_size);
+    memset(recv_chunk, 0, pg_handle->max_buffer_size);
     
     // Phase 1: Reduce-scatter
     // Each process will reduce its assigned chunk

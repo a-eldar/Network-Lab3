@@ -4,6 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/param.h>
 
 uint16_t get_local_lid(struct ibv_context *context, int port) {
     struct ibv_port_attr attr;
@@ -53,7 +54,7 @@ int init_neighbor_connection(struct neighbor_connection *conn, struct ibv_device
     
     // Allocate buffer
     int page_size = sysconf(_SC_PAGESIZE);
-    conn->buf = malloc((buf_size + page_size - 1) & ~(page_size - 1));
+    conn->buf = malloc(roundup(buf_size, page_size));
     if (!conn->buf) {
         fprintf(stderr, "Failed to allocate buffer\n");
         return -1;
@@ -129,7 +130,8 @@ int init_neighbor_connection(struct neighbor_connection *conn, struct ibv_device
         .qp_state = IBV_QPS_INIT,
         .pkey_index = 0,
         .port_num = ib_port,
-        .qp_access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE
+        .qp_access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE | 
+                           IBV_ACCESS_LOCAL_WRITE
     };
     
     if (ibv_modify_qp(conn->qp, &attr,
