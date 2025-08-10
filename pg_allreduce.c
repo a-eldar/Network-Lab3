@@ -176,12 +176,18 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
             return -1;
         }
         
-        // Synchronize to ensure write is complete
-        if (synchronize_servers(pg_handle) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
+        // // Synchronize to ensure write is complete
+        // if (synchronize_servers(pg_handle) < 0) {
+        //     free(send_chunk);
+        //     free(recv_chunk);
+        //     return -1;
+        // }
+
+        sleep(1); // wait 1s for write to complete
+
+
+
+
         // -------- DEBUG PRINT --------
         printf("Server %d: Sent chunk %d to right neighbor\n", idx, send_chunk_id);
         // ------------------------------
@@ -212,12 +218,16 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
                          datatype,
                          op);
         
-        // Synchronize before next step
-        if (synchronize_servers(pg_handle) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
+        // // Synchronize before next step
+        // if (synchronize_servers(pg_handle) < 0) {
+        //     free(send_chunk);
+        //     free(recv_chunk);
+        //     return -1;
+        // }
+
+        sleep(1); // Wait 1s for read to complete
+
+
         // -------- DEBUG PRINT --------
         printf("Server %d: Received chunk %d from left neighbor\n", idx, recv_chunk_id);
         // ------------------------------
