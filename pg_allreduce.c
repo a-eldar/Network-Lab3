@@ -166,7 +166,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
                            pg_handle->right_conn->remote_addr,
                            pg_handle->right_conn->remote_rkey) < 0) {
             free(send_chunk);
-            free(recv_chunk);
+            free(recv_chunk); 
             return -1;
         }
         
