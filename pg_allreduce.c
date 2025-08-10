@@ -189,7 +189,12 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
 
 
         // -------- DEBUG PRINT --------
-        printf("Server %d: Sent chunk %d to right neighbor\n", idx, send_chunk_id);
+        // print the first of the the sent chunk
+        if (datatype == INT) {
+            printf("Server %d: Sending chunk %d with first value %d || step = %d\n", idx, send_chunk_id, ((int *)send_chunk)[0], step);
+        } else if (datatype == DOUBLE) {
+            printf("Server %d: Sending chunk %d with first value %f || step = %d\n", idx, send_chunk_id, ((double *)send_chunk)[0], step);
+        }
         // ------------------------------
         
         // Read from left neighbor's buffer
@@ -229,9 +234,32 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
 
 
         // -------- DEBUG PRINT --------
-        printf("Server %d: Received chunk %d from left neighbor\n", idx, recv_chunk_id);
+        // print the first of the received chunk
+        if (datatype == INT) {
+            printf("Server %d: Received chunk %d with first value %d || step = %d\n", idx
+                     , recv_chunk_id, ((int *)recv_chunk)[0], step);
+        } else if (datatype == DOUBLE) {
+            printf("Server %d: Received chunk %d with first value %f || step = %d\n", idx
+                        , recv_chunk_id, ((double *)recv_chunk)[0], step);
+        }
         // ------------------------------
     }
+    // -------- DEBUG PRINT --------
+    // print the first of each chunk
+    for (int i = 0; i < n; i++) {
+        int offset = i * chunk_size;
+        if (i == n - 1) {
+            offset += remainder; // Last chunk may have remainder
+        }
+        if (offset < count) {
+            if (datatype == INT) {
+                printf("Server %d: Final result chunk %d starts with %d\n", idx, i, ((int *)recvbuf)[offset]);
+            } else if (datatype == DOUBLE) {
+                printf("Server %d: Final result chunk %d starts with %f\n", idx, i, ((double *)recvbuf)[offset]);
+            }
+        }
+    }
+    // ------------------------------
     
     // Phase 2: All-gather using ring algorithm
     // Each server broadcasts its chunk to all others
