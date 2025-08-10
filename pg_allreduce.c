@@ -182,6 +182,9 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
             free(recv_chunk);
             return -1;
         }
+        // -------- DEBUG PRINT --------
+        printf("Server %d: Sent chunk %d to right neighbor\n", idx, send_chunk_id);
+        // ------------------------------
         
         // Read from left neighbor's buffer
         if (post_rdma_read(pg_handle->left_conn,
@@ -215,6 +218,9 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
             free(recv_chunk);
             return -1;
         }
+        // -------- DEBUG PRINT --------
+        printf("Server %d: Received chunk %d from left neighbor\n", idx, recv_chunk_id);
+        // ------------------------------
     }
     
     // Phase 2: All-gather using ring algorithm
