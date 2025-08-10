@@ -132,7 +132,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
     
     // Phase 1: Reduce-scatter using ring algorithm
     // Each server will accumulate values for its designated chunk
-    for (int step = 0; step < n - 1; step++) {
+    for (int step = 0; step < n; step++) {
         // Calculate which chunk to send/receive
         int send_chunk_id = (idx - step + n) % n;
         int recv_chunk_id = (idx - step - 1 + n) % n;
@@ -235,7 +235,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
     
     // Phase 2: All-gather using ring algorithm
     // Each server broadcasts its chunk to all others
-    for (int step = 0; step < n - 1; step++) {
+    for (int step = 0; step < n; step++) {
         // Calculate which chunk to send/receive
         int send_chunk_id = (idx - step + n) % n;
         int recv_chunk_id = (idx - step - 1 + n) % n;
@@ -280,11 +280,12 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         }
         
         // Synchronize to ensure write is complete
-        if (synchronize_servers(pg_handle) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
+        // if (synchronize_servers(pg_handle) < 0) {
+        //     free(send_chunk);
+        //     free(recv_chunk);
+        //     return -1;
+        // }
+        sleep(1); // wait 1s for write to complete
         
         // Read from left neighbor's buffer
         if (post_rdma_read(pg_handle->left_conn,
@@ -309,11 +310,12 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         memcpy((char *)recvbuf + recv_offset * dtype_size, recv_chunk, recv_bytes);
         
         // Synchronize before next step
-        if (synchronize_servers(pg_handle) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
+        // if (synchronize_servers(pg_handle) < 0) {
+        //     free(send_chunk);
+        //     free(recv_chunk);
+        //     return -1;
+        // }
+        sleep(1); // Wait 1s for read to complete
     }
     
     free(send_chunk);
