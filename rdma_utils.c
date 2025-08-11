@@ -168,7 +168,7 @@ int modify_qp_to_rts(struct ibv_qp *qp) {
     return 0;
 }
 
-int post_rdma_write(RDMAConnection *conn, void *local_addr, size_t size, uint64_t remote_addr, uint32_t remote_rkey) {
+int post_send(RDMAConnection *conn, void *local_addr, size_t size, uint64_t remote_addr, uint32_t remote_rkey) {
     struct ibv_sge sge;
     struct ibv_send_wr wr, *bad_wr;
     
@@ -181,7 +181,7 @@ int post_rdma_write(RDMAConnection *conn, void *local_addr, size_t size, uint64_
     wr.wr_id = 1;
     wr.sg_list = &sge;
     wr.num_sge = 1;
-    wr.opcode = IBV_WR_RDMA_WRITE;
+    wr.opcode = IBV_WR_SEND;
     wr.send_flags = IBV_SEND_SIGNALED;
     wr.wr.rdma.remote_addr = remote_addr;
     wr.wr.rdma.rkey = remote_rkey;
@@ -194,7 +194,7 @@ int post_rdma_write(RDMAConnection *conn, void *local_addr, size_t size, uint64_
     return 0;
 }
 
-int post_rdma_read(RDMAConnection *conn, void *local_addr, size_t size, uint64_t remote_addr, uint32_t remote_rkey) {
+int post_recv(RDMAConnection *conn, void *local_addr, size_t size) {
     struct ibv_sge sge;
     struct ibv_send_wr wr, *bad_wr;
     
@@ -207,12 +207,8 @@ int post_rdma_read(RDMAConnection *conn, void *local_addr, size_t size, uint64_t
     wr.wr_id = 2;
     wr.sg_list = &sge;
     wr.num_sge = 1;
-    wr.opcode = IBV_WR_RDMA_READ;
-    wr.send_flags = IBV_SEND_SIGNALED;
-    wr.wr.rdma.remote_addr = remote_addr;
-    wr.wr.rdma.rkey = remote_rkey;
     
-    if (ibv_post_send(conn->qp, &wr, &bad_wr)) {
+    if (ibv_post_recv(conn->qp, &wr, &bad_wr)) {
         fprintf(stderr, "Failed to post RDMA read\n");
         return -1;
     }
