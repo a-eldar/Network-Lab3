@@ -158,6 +158,15 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         
         // Write to right neighbor's buffer
         memcpy(pg_handle->right_conn->buf, send_chunk, send_bytes);
+
+        if (post_recv(pg_handle->left_conn, 
+                          pg_handle->left_conn->buf,
+                          recv_bytes) < 0) {
+            free(send_chunk);
+            free(recv_chunk);
+            return -1;
+        }
+
         if (post_send(pg_handle->right_conn,
                            pg_handle->right_conn->buf,
                            send_bytes,
@@ -195,14 +204,6 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         }
         // ------------------------------
         
-        // Read from left neighbor's buffer
-        if (post_recv(pg_handle->left_conn, 
-                          pg_handle->left_conn->buf,
-                          recv_bytes) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
         
         if (wait_for_completion(pg_handle->left_conn) < 0) {
             free(send_chunk);
