@@ -55,7 +55,7 @@ static int synchronize_servers(PGHandle *pg_handle) {
     
     // Write sync value to right neighbor
     memcpy((char *)pg_handle->right_conn->buf + sync_offset, &sync_val, sizeof(int));
-    if (post_send(pg_handle->right_conn, 
+    if (post_rdma_write(pg_handle->right_conn, 
                        (char *)pg_handle->right_conn->buf + sync_offset,
                        sizeof(int),
                        pg_handle->right_conn->remote_addr + sync_offset,
@@ -71,9 +71,11 @@ static int synchronize_servers(PGHandle *pg_handle) {
     int received_sync = 0;
     int attempts = 0;
     while (received_sync == 0 && attempts < 1000) {
-        if (post_recv(pg_handle->left_conn, 
+        if (post_rdma_read(pg_handle->left_conn,
                           (char *)pg_handle->left_conn->buf + sync_offset,
-                          sizeof(int)) < 0) {
+                          sizeof(int),
+                          pg_handle->left_conn->remote_addr + sync_offset,
+                          pg_handle->left_conn->remote_rkey) < 0) {
             return -1;
         }
         
@@ -158,28 +160,13 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         
         // Write to right neighbor's buffer
         memcpy(pg_handle->right_conn->buf, send_chunk, send_bytes);
-
-        if (post_recv(pg_handle->left_conn, 
-                          pg_handle->left_conn->buf,
-                          recv_bytes) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
-
-        if (post_send(pg_handle->right_conn,
+        if (post_rdma_write(pg_handle->right_conn,
                            pg_handle->right_conn->buf,
                            send_bytes,
                            pg_handle->right_conn->remote_addr,
                            pg_handle->right_conn->remote_rkey) < 0) {
             free(send_chunk);
             free(recv_chunk); 
-            return -1;
-        }
-
-        if (wait_for_completion(pg_handle->left_conn) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
             return -1;
         }
         
@@ -205,8 +192,22 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         printf("Server %d: Sent chunk %d to right neighbor\n", idx, send_chunk_id);
         // ------------------------------
         
+        // Read from left neighbor's buffer
+        if (post_rdma_read(pg_handle->left_conn,
+                          pg_handle->left_conn->buf,
+                          recv_bytes,
+                          pg_handle->left_conn->remote_addr,
+                          pg_handle->left_conn->remote_rkey) < 0) {
+            free(send_chunk);
+            free(recv_chunk);
+            return -1;
+        }
         
-
+        if (wait_for_completion(pg_handle->left_conn) < 0) {
+            free(send_chunk);
+            free(recv_chunk);
+            return -1;
+        }
         
         memcpy(recv_chunk, pg_handle->left_conn->buf, recv_bytes);
         
@@ -262,7 +263,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         
         // Write to right neighbor's buffer
         memcpy(pg_handle->right_conn->buf, send_chunk, send_bytes);
-        if (post_send(pg_handle->right_conn,
+        if (post_rdma_write(pg_handle->right_conn,
                            pg_handle->right_conn->buf,
                            send_bytes,
                            pg_handle->right_conn->remote_addr,
@@ -287,9 +288,11 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         sleep(1); // wait 1s for write to complete
         
         // Read from left neighbor's buffer
-        if (post_recv(pg_handle->left_conn, 
+        if (post_rdma_read(pg_handle->left_conn,
                           pg_handle->left_conn->buf,
-                          recv_bytes) < 0) {
+                          recv_bytes,
+                          pg_handle->left_conn->remote_addr,
+                          pg_handle->left_conn->remote_rkey) < 0) {
             free(send_chunk);
             free(recv_chunk);
             return -1;
