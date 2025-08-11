@@ -176,6 +176,12 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
             free(recv_chunk); 
             return -1;
         }
+
+        if (wait_for_completion(pg_handle->left_conn) < 0) {
+            free(send_chunk);
+            free(recv_chunk);
+            return -1;
+        }
         
         if (wait_for_completion(pg_handle->right_conn) < 0) {
             free(send_chunk);
@@ -205,11 +211,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         // ------------------------------
         
         
-        if (wait_for_completion(pg_handle->left_conn) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
+
         
         memcpy(recv_chunk, pg_handle->left_conn->buf, recv_bytes);
         
