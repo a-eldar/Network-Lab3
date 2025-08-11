@@ -189,7 +189,13 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
 
 
         // -------- DEBUG PRINT --------
-        printf("Server %d: Sent chunk %d to right neighbor\n", idx, send_chunk_id);
+        // Print the sent chunk's first element
+        if (datatype == INT) {
+            printf("Server %d: Sending chunk %d: %d\n", idx, send_chunk_id, ((int *)send_chunk)[0]);
+        } else if (datatype == DOUBLE) {
+            printf("Server %d: Sending chunk %d: %f\n", idx, send_chunk_id, ((double *)send_chunk)[0]);
+        }
+        
         // ------------------------------
         
         // Read from left neighbor's buffer
@@ -229,7 +235,13 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
 
 
         // -------- DEBUG PRINT --------
-        printf("Server %d: Received chunk %d from left neighbor\n", idx, recv_chunk_id);
+        //print the received chunk's first element
+        if (datatype == INT) {
+            printf("Server %d: Received chunk %d: %d\n", idx, recv_chunk_id, ((int *)recv_chunk)[0]);
+        } else if (datatype == DOUBLE) {
+            printf("Server %d: Received chunk %d: %f\n", idx, recv_chunk_id, ((double *)recv_chunk)[0]);
+        }
+
         // ------------------------------
     }
     
