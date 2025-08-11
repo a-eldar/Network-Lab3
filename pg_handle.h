@@ -46,8 +46,10 @@ typedef struct PGHandle {
     char **server_list;
     
     // RDMA connections
-    RDMAConnection *left_conn;   // Connection to read from left neighbor
-    RDMAConnection *right_conn;  // Connection to write to right neighbor
+    // left_conn: Buffer for writing data that left neighbor will read from us
+    // right_conn: Connection for reading data from left neighbor
+    RDMAConnection *left_conn;   // Local write buffer for left neighbor to read
+    RDMAConnection *right_conn;  // Connection to read from left neighbor
     
     // Synchronization
     int connected;

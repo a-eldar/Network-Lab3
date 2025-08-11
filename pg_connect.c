@@ -83,11 +83,13 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
     ConnectionInfo local_right_info, remote_right_info;
     
     // Setup RDMA resources for both connections
+    // Left connection: for writing data that left neighbor will read
     if (setup_connection(pg_handle->left_conn, &local_left_info) < 0) {
         fprintf(stderr, "Failed to setup left connection\n");
         return -1;
     }
     
+    // Right connection: for reading data from left neighbor
     if (setup_connection(pg_handle->right_conn, &local_right_info) < 0) {
         fprintf(stderr, "Failed to setup right connection\n");
         return -1;
@@ -137,6 +139,20 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
         }
     }
     
+    // Store remote info for left connection (we will read from left neighbor)
+    pg_handle->left_conn->remote_qpn = remote_left_info.qpn;
+    pg_handle->left_conn->remote_lid = remote_left_info.lid;
+    pg_handle->left_conn->remote_psn = remote_left_info.psn;
+    pg_handle->left_conn->remote_addr = remote_left_info.addr;
+    pg_handle->left_conn->remote_rkey = remote_left_info.rkey;
+    
+    // Store remote info for right connection (right neighbor will read from us)
+    pg_handle->right_conn->remote_qpn = remote_right_info.qpn;
+    pg_handle->right_conn->remote_lid = remote_right_info.lid;
+    pg_handle->right_conn->remote_psn = remote_right_info.psn;
+    pg_handle->right_conn->remote_addr = remote_right_info.addr;
+    pg_handle->right_conn->remote_rkey = remote_right_info.rkey;
+    
     // Establish RDMA connections
     if (establish_connection(pg_handle->left_conn, &remote_left_info) < 0) {
         fprintf(stderr, "Failed to establish left connection\n");
@@ -160,6 +176,8 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
     pg_handle->connected = 1;
     
     printf("Server %d: Successfully connected to process group\n", idx);
+    printf("  - Left connection buffer for neighbor %d to read from\n", left_idx);
+    printf("  - Right connection to read from neighbor %d\n", left_idx);
     
     return 0;
 }
