@@ -160,21 +160,21 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         
         // Write to right neighbor's buffer
         memcpy(pg_handle->right_conn->buf, send_chunk, send_bytes);
-        if (post_rdma_write(pg_handle->right_conn,
-                           pg_handle->right_conn->buf,
-                           send_bytes,
-                           pg_handle->right_conn->remote_addr,
-                           pg_handle->right_conn->remote_rkey) < 0) {
-            free(send_chunk);
-            free(recv_chunk); 
-            return -1;
-        }
+        // if (post_rdma_write(pg_handle->right_conn,
+        //                    pg_handle->right_conn->buf,
+        //                    send_bytes,
+        //                    pg_handle->right_conn->remote_addr,
+        //                    pg_handle->right_conn->remote_rkey) < 0) {
+        //     free(send_chunk);
+        //     free(recv_chunk); 
+        //     return -1;
+        // }
         
-        if (wait_for_completion(pg_handle->right_conn) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
+        // if (wait_for_completion(pg_handle->right_conn) < 0) {
+        //     free(send_chunk);
+        //     free(recv_chunk);
+        //     return -1;
+        // }
         
         // // Synchronize to ensure write is complete
         // if (synchronize_servers(pg_handle) < 0) {
