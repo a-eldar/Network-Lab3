@@ -223,7 +223,7 @@ static struct pingpong_dest *pp_client_exch_dest(const char *servername, int por
                 break;
             close(sockfd);
             sockfd = -1;
-        }/home/itai/CLionProjects/Network-Lab2/bw_template.c
+        }
     }
 
     freeaddrinfo(res);
@@ -381,7 +381,7 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
         return NULL;
     }
 
-    memset(ctx->buf, 0x02, size);
+    memset(ctx->buf, 0x7b + is_server, size);
 
     ctx->context = ibv_open_device(ib_dev);
     if (!ctx->context) {
@@ -683,16 +683,6 @@ void server_recv_operation(struct pingpong_context *ctx, int iters, int max_size
             fprintf(stderr, "Server couldn't wait for completions, size=%d\n", size);
             return;
         }
-        // print the first 5 bytes of the buffer
-        printf("Server received %d messages of size %d\n", iters, size);
-        printf("Buffer content: ");
-        for (int i = 0; i < 5 && i < size; i++) {
-             printf("%02x ", ((unsigned char *)ctx->buf)[i]);
-        }
-        printf("\n");
-        
-        
-        
         // if (pp_post_send(ctx)) {
         //     fprintf(stderr, "Server couldn't post send\n");
         //     return;
@@ -914,7 +904,6 @@ int main(int argc, char *argv[])
         client_send_operation(max_size, size_step, iters, ctx, tx_depth);
     } else {
         server_recv_operation(ctx, iters, max_size, size_step);
-
     }
 
     ibv_free_device_list(dev_list);
