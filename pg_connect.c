@@ -107,6 +107,7 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_handle){
     struct ibv_device **dev_list;
     struct ibv_device *ib_dev;
+    struct pingpong_context *left_ctx, *right_ctx;
     struct pingpong_dest     my_dest_left, my_dest_right;
     struct pingpong_dest    *rem_dest_left, *rem_dest_right;
     char                    *ib_devname = NULL;
