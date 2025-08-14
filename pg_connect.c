@@ -107,7 +107,6 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
 int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_handle){
     struct ibv_device **dev_list;
     struct ibv_device *ib_dev;
-    struct pingpong_context *left_ctx, *right_ctx;
     struct pingpong_dest     my_dest_left, my_dest_right;
     struct pingpong_dest    *rem_dest_left, *rem_dest_right;
     char                    *ib_devname = NULL;
@@ -155,13 +154,13 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
         return -1;
     }
     pg_handle->right_conn = pp_init_ctx(ib_dev, RDMA_BUFFER_SIZE, 10, 100, ib_port, 0, 0);
-    if (!right_ctx) {
+    if (!pg_handle->right_conn) {
         fprintf(stderr, "Failed to initialize right context\n");
         ibv_free_device_list(dev_list);
         return -1;
     }
     pg_handle->left_conn = pp_init_ctx(ib_dev, RDMA_BUFFER_SIZE, 10, 100, ib_port, 0, 1);
-    if (!left_ctx) {
+    if (!pg_handle->left_conn) {
         fprintf(stderr, "Failed to initialize left context\n");
         pp_close_ctx(right_ctx);
         ibv_free_device_list(dev_list);
