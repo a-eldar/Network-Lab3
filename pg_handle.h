@@ -17,26 +17,26 @@ typedef enum {
     MULT
 } OPERATION;
 
-// Structure to hold RDMA connection information
-typedef struct {
-    struct ibv_context *context;
-    struct ibv_pd *pd;
-    struct ibv_mr *mr;
-    struct ibv_cq *cq;
-    struct ibv_qp *qp;
-    struct ibv_port_attr port_attr;
-    
-    // Buffer for RDMA operations
-    void *buf;
-    size_t buf_size;
-    
-    // Remote connection info
-    uint32_t remote_qpn;
-    uint16_t remote_lid;
-    uint32_t remote_psn;
-    uint64_t remote_addr;
-    uint32_t remote_rkey;
-} RDMAConnection;
+struct pingpong_context {
+    struct ibv_context		*context;
+    struct ibv_comp_channel	*channel;
+    struct ibv_pd		*pd;
+    struct ibv_mr		*mr;
+    struct ibv_cq		*cq;
+    struct ibv_qp		*qp;
+    void			*buf;
+    int				size;
+    int				rx_depth;
+    int				routs;
+    struct ibv_port_attr	portinfo;
+};
+
+struct pingpong_dest {
+    int lid;
+    int qpn;
+    int psn;
+    union ibv_gid gid;
+};
 
 // Main handle structure for process group
 typedef struct PGHandle {
@@ -48,25 +48,13 @@ typedef struct PGHandle {
     // RDMA connections
     // left_conn: Buffer for writing data that left neighbor will read from us
     // right_conn: Connection for reading data from left neighbor
-    RDMAConnection *left_conn;   // Local write buffer for left neighbor to read
-    RDMAConnection *right_conn;  // Connection to read from left neighbor
+    struct pingpong_context *left_conn;
+    struct pingpong_context *right_conn;
     
     // Synchronization
     int connected;
     
-    // Ring algorithm specific
-    void *work_buffer;  // Working buffer for ring operations
-    size_t work_buffer_size;
-    
 } PGHandle;
 
-// Connection info structure for TCP exchange
-typedef struct {
-    uint16_t lid;
-    uint32_t qpn;
-    uint32_t psn;
-    uint64_t addr;
-    uint32_t rkey;
-} ConnectionInfo;
 
 #endif // PG_HANDLE_H
