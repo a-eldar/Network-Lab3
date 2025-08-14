@@ -99,12 +99,12 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
     my_dest_left.lid = pg_handle->left_conn->portinfo.lid;
     my_dest_left.qpn = pg_handle->left_conn->qp->qp_num;
     my_dest_left.psn = rand() & 0xffffff;
-    my_dest_left.gid = memset(&pg_handle->left_conn->portinfo.gid, 0, sizeof(union ibv_gid));
+    my_dest_left.gid = memset(&pg_handle->left_conn->gid, 0, sizeof(union ibv_gid));
 
     my_dest_right.lid = pg_handle->right_conn->portinfo.lid;
     my_dest_right.qpn = pg_handle->right_conn->qp->qp_num;
     my_dest_right.psn = rand() & 0xffffff;
-    my_dest_right.gid = memset(&pg_handle->right_conn->portinfo.gid, 0, sizeof(union ibv_gid));
+    my_dest_right.gid = memset(&pg_handle->right_conn->gid, 0, sizeof(union ibv_gid));
 
     if(pg_handle->server_idx == 0){
         rem_dest_right = pp_client_exch_dest(pg_handle->server_list[1], port, &my_dest_right);
