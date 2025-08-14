@@ -4,6 +4,9 @@
 #include "rdma_utils.h"
 #include "pg_handle.h"
 
+static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
+                                            int rx_depth, int tx_depth, int port,
+                                            int use_event, int is_server);
 /**
  * @brief Connects a process to its group members in a ring topology
  *
