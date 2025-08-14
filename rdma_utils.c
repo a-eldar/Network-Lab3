@@ -276,7 +276,7 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
     ctx->size     = size;
     ctx->rx_depth = rx_depth;
     ctx->routs    = rx_depth;
-
+    int page_size = sysconf(_SC_PAGESIZE);
     ctx->buf = malloc(roundup(size, page_size));
     if (!ctx->buf) {
         fprintf(stderr, "Couldn't allocate work buf.\n");
