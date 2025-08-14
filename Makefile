@@ -10,7 +10,7 @@ EASY_TEST_OBJS = $(EASY_TEST_SRCS:.c=.o)
 
 # Header files
 HEADERS = pg_handle.h rdma_utils.h pg_allreduce.h
-EASY_TEST_HEADERS = pg_handle.h rdma_utils.h
+EASY_TEST_HEADERS = pg_handle.h rdma_utils.h pg_connect.h
 
 # Test program (optional)
 TEST_SRC = test_allreduce.c
