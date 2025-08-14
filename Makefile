@@ -28,10 +28,12 @@ test: $(OBJS) $(TEST_OBJ)
 # Clean build artifacts
 clean:
 	rm -f $(OBJS) $(TEST_OBJ) $(TEST_BIN)
-
 # Install headers (optional)
 install-headers:
 	mkdir -p /usr/local/include/pg_allreduce
 	cp $(HEADERS) /usr/local/include/pg_allreduce/
+
+bw_make:
+	gcc bw_template.c -libverbs -o server && ln -s server client
 
 .PHONY: all clean test install-headers
