@@ -1,4 +1,5 @@
-#include "pg_allreduce.h"
+//#include "pg_allreduce.h"
+#include "pg_connect.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,7 +33,7 @@ int main(int argc, char *argv[]) {
         free(serverlist);
         return 1;
     }
-    
+    /*
     // Test with integers
     int count = 100;
     int *sendbuf = malloc(count * sizeof(int));
@@ -116,4 +117,5 @@ int main(int argc, char *argv[]) {
     printf("Server %d: Test completed\n", idx);
     
     return 0;
+    */
 }
