@@ -381,7 +381,7 @@ static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
         return NULL;
     }
 
-    memset(ctx->buf, 0x7b + is_server, size);
+    memset(ctx->buf, 0x02 + is_server, size); // server: 0x03, client: 0x02
 
     ctx->context = ibv_open_device(ib_dev);
     if (!ctx->context) {
@@ -683,6 +683,14 @@ void server_recv_operation(struct pingpong_context *ctx, int iters, int max_size
             fprintf(stderr, "Server couldn't wait for completions, size=%d\n", size);
             return;
         }
+    
+        printf("Server reveived message %d of size %d\n", i, size);
+        printf("Message 5 first bytes: ");
+        for (int j = 0; j < 5 && j < size; j++) {
+            printf("%02x ", ((unsigned char *)ctx->buf)[j]);
+        }
+        printf("\n");
+
         // if (pp_post_send(ctx)) {
         //     fprintf(stderr, "Server couldn't post send\n");
         //     return;
