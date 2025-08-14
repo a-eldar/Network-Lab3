@@ -684,7 +684,7 @@ void server_recv_operation(struct pingpong_context *ctx, int iters, int max_size
             return;
         }
     
-        printf("Server reveived message %d of size %d\n", i, size);
+        printf("Server reveived message of size %d\n", size);
         printf("Message 5 first bytes: ");
         for (int j = 0; j < 5 && j < size; j++) {
             printf("%02x ", ((unsigned char *)ctx->buf)[j]);
