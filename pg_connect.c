@@ -248,7 +248,9 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
     
     memset(pg_handle->right_conn->buf, idx + 1, pg_handle->right_conn->size);
     pp_post_send(pg_handle->right_conn);
+    printf("Server %d sent data to right neighbor\n", pg_handle->server_idx);
     pp_wait_completions(pg_handle->right_conn, 1);
+    printf("Server %d received data from right neighbor\n", pg_handle->server_idx);
     pp_wait_completions(pg_handle->left_conn, 1);
     // print the first 5 elements incoming from the left neighbor
     printf("Left neighbor sent: ");
