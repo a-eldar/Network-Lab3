@@ -17,6 +17,7 @@
 #include <time.h>
 
 #include <infiniband/verbs.h>
+#include "pg_handle.h"
 
 #define WC_BATCH (10)
 
