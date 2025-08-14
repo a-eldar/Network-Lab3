@@ -1,5 +1,6 @@
 #include "rdma_utils.h"
 #include "pg_handle.h"
+#include "pg_connect.h"
 
 static int page_size;
 
