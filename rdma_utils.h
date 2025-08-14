@@ -36,17 +36,17 @@ enum {
 // The most useful struct for us - used to pass information
 
 
-enum ibv_mtu pp_mtu_to_enum(int mtu)
-{
-    switch (mtu) {
-    case 256:  return IBV_MTU_256;
-    case 512:  return IBV_MTU_512;
-    case 1024: return IBV_MTU_1024;
-    case 2048: return IBV_MTU_2048;
-    case 4096: return IBV_MTU_4096;
-    default:   return -1;
-    }
-}
+// enum ibv_mtu pp_mtu_to_enum(int mtu)
+// {
+//     switch (mtu) {
+//     case 256:  return IBV_MTU_256;
+//     case 512:  return IBV_MTU_512;
+//     case 1024: return IBV_MTU_1024;
+//     case 2048: return IBV_MTU_2048;
+//     case 4096: return IBV_MTU_4096;
+//     default:   return -1;
+//     }
+// }
 
 int pp_get_port_info(struct ibv_context *context, int port,
                      struct ibv_port_attr *attr);
