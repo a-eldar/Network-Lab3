@@ -53,13 +53,13 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
         ibv_free_device_list(dev_list);
         return -1;
     }
-    pg_handle->right_conn = pp_init_ctx(ib_dev, RDMA_BUFFER_SIZE, 10, 100, ib_port, 0, 1);
+    pg_handle->right_conn = pp_init_ctx(ib_dev, RDMA_BUFFER_SIZE, 10, 100, ib_port, 0, 0);
     if (!right_ctx) {
         fprintf(stderr, "Failed to initialize right context\n");
         ibv_free_device_list(dev_list);
         return -1;
     }
-    pg_handle->left_conn = pp_init_ctx(ib_dev, RDMA_BUFFER_SIZE, 10, 100, ib_port, 0, 0);
+    pg_handle->left_conn = pp_init_ctx(ib_dev, RDMA_BUFFER_SIZE, 10, 100, ib_port, 0, 1);
     if (!left_ctx) {
         fprintf(stderr, "Failed to initialize left context\n");
         pp_close_ctx(right_ctx);

@@ -262,6 +262,7 @@ static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
     return rem_dest;
 }
 
+#include <sys/param.h>
 
 static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
                                             int rx_depth, int tx_depth, int port,
