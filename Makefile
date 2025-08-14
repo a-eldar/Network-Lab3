@@ -28,8 +28,8 @@ all: $(OBJS)
 test: $(OBJS) $(TEST_OBJ)
 	$(CC) $(CFLAGS) -o $(TEST_BIN) $(OBJS) $(TEST_OBJ) $(LDFLAGS)
 
-easy_test: $(EASY_TEST_OBJS)
-	$(CC) $(CFLAGS) -o easy_test $(EASY_TEST_OBJS) $(LDFLAGS)
+easy_test: $(EASY_TEST_OBJS) $(TEST_OBJ)
+	$(CC) $(CFLAGS) -o easy_test $(EASY_TEST_OBJS) $(TEST_OBJ) $(LDFLAGS)
 
 # Clean build artifacts
 clean:
