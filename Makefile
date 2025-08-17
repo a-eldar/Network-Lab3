@@ -5,12 +5,12 @@ LDFLAGS = -libverbs -lpthread
 # Source files
 SRCS = rdma_utils.c pg_connect.c pg_allreduce.c pg_close.c
 OBJS = $(SRCS:.c=.o)
-EASY_TEST_SRCS = rdma_utils.c pg_connect.c
+EASY_TEST_SRCS = rdma_utils.c pg_connect.c bw_template.c
 EASY_TEST_OBJS = $(EASY_TEST_SRCS:.c=.o)
 
 # Header files
 HEADERS = pg_handle.h rdma_utils.h pg_allreduce.h
-EASY_TEST_HEADERS = pg_handle.h rdma_utils.h pg_connect.h
+EASY_TEST_HEADERS = pg_handle.h rdma_utils.h pg_connect.h bw_template.h
 
 # Test program (optional)
 TEST_SRC = test_allreduce.c
@@ -28,8 +28,8 @@ all: $(OBJS)
 test: $(OBJS) $(TEST_OBJ)
 	$(CC) $(CFLAGS) -o $(TEST_BIN) $(OBJS) $(TEST_OBJ) $(LDFLAGS)
 
-easy_test: $(EASY_TEST_OBJS) $(TEST_OBJ)
-	$(CC) $(CFLAGS) -o easy_test $(EASY_TEST_OBJS) $(TEST_OBJ) $(LDFLAGS)
+easy_test: $(EASY_TEST_OBJS)
+	$(CC) $(CFLAGS) -o easy_test $(EASY_TEST_OBJS) $(LDFLAGS)
 
 # Clean build artifacts
 clean:
