@@ -2,6 +2,7 @@
 #include "pg_handle.h"
 
 
+
 int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_handle){
     if (len <= 0 || idx < 0 || idx >= len) {
         fprintf(stderr, "Invalid server list or index\n");
@@ -58,7 +59,82 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
             return -1;
         } // for the right connection this server is the client
     }
+    pg_handle->connected = 1;
+
+
     
     return 0;
 }
+
+int main(int argc, char const *argv[])
+{
+    if (argc < 4) {
+        fprintf(stderr, "Usage: %s <num_servers> <server_idx> <server1> [server2] ...\n", argv[0]);
+        return 1;
+    }
+    int num_servers = atoi(argv[1]);
+    int server_idx = atoi(argv[2]);
+    if (num_servers <= 0 || server_idx < 0 || server_idx >= num_servers) {
+        fprintf(stderr, "Invalid number of servers or server index\n");
+        return 1;
+    }
+    char **server_list = malloc(num_servers * sizeof(char*));
+    if (!server_list) {
+        perror("Failed to allocate server list");
+        return 1;
+    }
+    for (int i = 0; i < num_servers; i++) {
+        server_list[i] = strdup(argv[i + 3]);
+        if (!server_list[i]) {
+            perror("Failed to copy server name");
+            for (int j = 0; j < i; j++) {
+                free(server_list[j]);
+            }
+            free(server_list);
+            return 1;
+        }
+    }
+    PGHandle pg_handle;
+    if (connect_process_group(server_list, num_servers, server_idx, &pg_handle) < 0) {
+        fprintf(stderr, "Failed to connect process group\n");
+        for (int i = 0; i < num_servers; i++) {
+            free(server_list[i]);
+        }
+        free(server_list);
+        return 1;
+    }
+    printf("Process group connected successfully!\n");
+    // Clean up
+    for (int i = 0; i < num_servers; i++) {
+        free(server_list[i]);
+    }
+    free(server_list);
+
+    // check if the connections are established by sending a simple message between neighbors
+    // copy into the buffer
+    memcpy(pg_handle.right_conn->buf, "Hello from left", 15);
+    // send the message
+    if (pp_post_send(pg_handle.right_conn)) {
+        fprintf(stderr, "Failed to post send on right connection\n");
+        return 1;
+    }
+    // wait for completion
+    if (pp_wait_completions(pg_handle.right_conn, 1)) {
+        fprintf(stderr, "Failed to wait for completion on right connection\n");
+        return 1;
+    }
+    // sleep for a while to ensure the message is received
+    sleep(1);
+    // wait for completion on the left connection
+    if (pp_wait_completions(pg_handle.left_conn, 1)) {
+        fprintf(stderr, "Failed to wait for completion on left connection\n");
+        return 1;
+    }
+    // print the message received on the left connection
+    printf("Message received on left connection: %s\n", (char *)pg_handle.left_conn->buf);
+
+
+    return 0;
+}
+
 
