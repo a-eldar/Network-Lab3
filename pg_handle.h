@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include "bw_template.h"
 
 #define MAX_WR_ID 1000
 #define RDMA_BUFFER_SIZE (1024 * 1024 * 16)  // 16MB buffer for RDMA operations
@@ -19,26 +20,7 @@ typedef enum {
     MULT
 } OPERATION;
 
-struct pingpong_context {
-    struct ibv_context		*context;
-    struct ibv_comp_channel	*channel;
-    struct ibv_pd		*pd;
-    struct ibv_mr		*mr;
-    struct ibv_cq		*cq;
-    struct ibv_qp		*qp;
-    void			*buf;
-    int				size;
-    int				rx_depth;
-    int				routs;
-    struct ibv_port_attr	portinfo;
-};
 
-struct pingpong_dest {
-    int lid;
-    int qpn;
-    int psn;
-    union ibv_gid gid;
-};
 
 // Main handle structure for process group
 typedef struct PGHandle {
