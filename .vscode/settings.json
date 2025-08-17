@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "inet.h": "c",
-        "rdma_utils.h": "c"
+        "rdma_utils.h": "c",
+        "bw_template.h": "c"
     }
 }
