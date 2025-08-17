@@ -4,6 +4,7 @@
 #include <infiniband/verbs.h>
 #include <stdint.h>
 
+#define DEBUG 1
 #define MAX_WR_ID 1000
 #define RDMA_BUFFER_SIZE (1024 * 1024 * 16)  // 16MB buffer for RDMA operations
 
@@ -55,6 +56,17 @@ typedef struct PGHandle {
     int connected;
     
 } PGHandle;
+
+void print_debug(const char *format, ...){
+    if (DEBUG) {
+        va_list args;
+        va_start(args, format);
+        fprintf(stderr, "DEBUG: ");
+         // Print the formatted string to stderr
+        vfprintf(stderr, format, args);
+        va_end(args);
+    }
+}
 
 
 #endif // PG_HANDLE_H

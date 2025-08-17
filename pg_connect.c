@@ -1,7 +1,7 @@
 
 #include "pg_connect.h"
-
 static int page_size;
+
 
 
 
@@ -107,6 +107,9 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
    
 
     if(pg_handle->server_idx == 0){
+
+        print_debug("Server %d is connecting to left neighbor %s\n", pg_handle->server_idx, pg_handle->server_list[pg_handle->num_servers - 1]);
+
         rem_dest_right = pp_client_exch_dest(pg_handle->server_list[1], port, &my_dest_right);
         if (!rem_dest_right) {
             fprintf(stderr, "Server couldn't exchange left destination\n");
@@ -115,6 +118,9 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
             ibv_free_device_list(dev_list);
             return -1;
         }
+        
+        print_debug("Server %d is connecting to right neighbor %s\n", pg_handle->server_idx, pg_handle->server_list[0]);
+
         rem_dest_left = pp_server_exch_dest(pg_handle->left_conn, ib_port, mtu, port, 0, &my_dest_left, -1);
         if (!rem_dest_left) {
             fprintf(stderr, "Server couldn't exchange right destination\n");
@@ -126,6 +132,9 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
     
     }
     else{
+
+        print_debug("Server %d is connecting to left neighbor %s\n", pg_handle->server_idx, pg_handle->server_list[pg_handle->server_idx - 1]);
+
         rem_dest_left = pp_server_exch_dest(pg_handle->left_conn, ib_port, mtu, port, 0, &my_dest_left, -1);
         if (!rem_dest_left) {
             fprintf(stderr, "Server couldn't exchange left destination\n");
@@ -134,6 +143,8 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
             ibv_free_device_list(dev_list);
             return -1;
         }
+        print_debug("Server %d is connecting to right neighbor %s\n", pg_handle->server_idx, pg_handle->server_list[(pg_handle->server_idx + 1) % pg_handle->num_servers]);
+
         int server_idx_right = (pg_handle->server_idx + 1) % pg_handle->num_servers;
         rem_dest_right = pp_client_exch_dest(pg_handle->server_list[server_idx_right], port, &my_dest_right);
         if (!rem_dest_right) {
