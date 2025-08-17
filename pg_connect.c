@@ -1,7 +1,20 @@
 
 #include "pg_handle.h"
+#include <stdio.h>
+#include <stdarg.h>
 
+#define DEBUG 1
 
+void print_debug(const char *format, ...){
+    if (DEBUG) {
+        va_list args;
+        va_start(args, format);
+        fprintf(stderr, "DEBUG: ");
+         // Print the formatted string to stderr
+        vfprintf(stderr, format, args);
+        va_end(args);
+    }
+}
 
 int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_handle){
     if (len <= 0 || idx < 0 || idx >= len) {
@@ -118,11 +131,13 @@ int main(int argc, char const *argv[])
         fprintf(stderr, "Failed to post send on right connection\n");
         return 1;
     }
+    print_debug("Message sent on right connection: %s\n", (char *)pg_handle.right_conn->buf);
     // wait for completion
     if (pp_wait_completions(pg_handle.right_conn, 1)) {
         fprintf(stderr, "Failed to wait for completion on right connection\n");
         return 1;
     }
+    print_debug("Message sent on right connection completed\n");
     // sleep for a while to ensure the message is received
     sleep(1);
     // wait for completion on the left connection
@@ -130,6 +145,7 @@ int main(int argc, char const *argv[])
         fprintf(stderr, "Failed to wait for completion on left connection\n");
         return 1;
     }
+    print_debug("Message received on left connection completed\n");
     // print the message received on the left connection
     printf("Message received on left connection: %s\n", (char *)pg_handle.left_conn->buf);
 
