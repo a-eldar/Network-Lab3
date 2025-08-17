@@ -64,6 +64,11 @@ int pp_get_port_info(struct ibv_context *context, int port,
                      struct ibv_port_attr *attr);
 void wire_gid_to_gid(const char *wgid, union ibv_gid *gid);
 void gid_to_wire_gid(const union ibv_gid *gid, char wgid[]);
+int pp_post_recv(struct pingpong_context *ctx, int n);
+int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
+                          enum ibv_mtu mtu, int sl,
+                          struct pingpong_dest *dest, int sgid_idx);
+int pp_post_send(struct pingpong_context *ctx);
 int pp_close_ctx(struct pingpong_context *ctx);
 
 // Helper functions

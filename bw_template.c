@@ -49,7 +49,7 @@ void gid_to_wire_gid(const union ibv_gid *gid, char wgid[])
     for (i = 0; i < 4; ++i)
         sprintf(&wgid[i * 8], "%08x", htonl(*(uint32_t *)(gid->raw + i * 4)));
 }
-static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
+int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
                           enum ibv_mtu mtu, int sl,
                           struct pingpong_dest *dest, int sgid_idx)
 {
@@ -417,7 +417,7 @@ int pp_close_ctx(struct pingpong_context *ctx)
     return 0;
 }
 
-static int pp_post_recv(struct pingpong_context *ctx, int n)
+int pp_post_recv(struct pingpong_context *ctx, int n)
 {
     struct ibv_sge list = {
             .addr	= (uintptr_t) ctx->buf,
@@ -440,7 +440,7 @@ static int pp_post_recv(struct pingpong_context *ctx, int n)
     return i;
 }
 
-static int pp_post_send(struct pingpong_context *ctx)
+int pp_post_send(struct pingpong_context *ctx)
 {
     struct ibv_sge list = {
             .addr	= (uint64_t)ctx->buf,
