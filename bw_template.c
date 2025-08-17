@@ -1,88 +1,5 @@
-/*
- * Copyright (c) 2005 Topspin Communications.  All rights reserved.
- * Copyright (c) 2006 Cisco Systems.  All rights reserved.
- *
- * This software is available to you under a choice of one of two
- * licenses.  You may choose to be licensed under the terms of the GNU
- * General Public License (GPL) Version 2, available from the file
- * COPYING in the main directory of this source tree, or the
- * OpenIB.org BSD license below:
- *
- *     Redistribution and use in source and binary forms, with or
- *     without modification, are permitted provided that the following
- *     conditions are met:
- *
- *      - Redistributions of source code must retain the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer.
- *
- *      - Redistributions in binary form must reproduce the above
- *        copyright notice, this list of conditions and the following
- *        disclaimer in the documentation and/or other materials
- *        provided with the distribution.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
- */
+#include "bw_template.h"
 
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/param.h>
-#include <sys/time.h>
-#include <stdlib.h>
-#include <getopt.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <time.h>
-
-#include <infiniband/verbs.h>
-
-#define WC_BATCH (10)
-
-// Additional Definitions:
-#define BITS_IN_BYTE (8)
-#define MEGA (1024 * 1024)
-
-
-enum {
-    PINGPONG_RECV_WRID = 1,
-    PINGPONG_SEND_WRID = 2,
-};
-
-static int page_size;
-
-// The most useful struct for us - used to pass information
-struct pingpong_context {
-    struct ibv_context		*context;
-    struct ibv_comp_channel	*channel;
-    struct ibv_pd		*pd;
-    struct ibv_mr		*mr;
-    struct ibv_cq		*cq;
-    struct ibv_qp		*qp;
-    void			*buf;
-    int				size;
-    int				rx_depth;
-    int				routs;
-    struct ibv_port_attr	portinfo;
-};
-
-struct pingpong_dest {
-    int lid;
-    int qpn;
-    int psn;
-    union ibv_gid gid;
-};
 
 enum ibv_mtu pp_mtu_to_enum(int mtu)
 {
@@ -710,15 +627,15 @@ void server_recv_operation(struct pingpong_context *ctx, int iters, int max_size
 
 ////////////// MAIN ///////////////
 
-int main(int argc, char *argv[])
+int bw(char* servername, struct pingpong_context *ctx)
 {
     struct ibv_device      **dev_list;
     struct ibv_device       *ib_dev;
-    struct pingpong_context *ctx;
+    //struct pingpong_context *ctx;
     struct pingpong_dest     my_dest;
     struct pingpong_dest    *rem_dest;
     char                    *ib_devname = NULL;
-    char                    *servername = NULL; // Modified: added `= NULL`
+    // char                    *servername = NULL; // Modified: added `= NULL`
     int                      port = 12345;
     int                      ib_port = 1;
     enum ibv_mtu             mtu = IBV_MTU_2048;
@@ -734,93 +651,6 @@ int main(int argc, char *argv[])
     char                     gid[33];
 
     srand48(getpid() * time(NULL));
-
-    while (1) {
-        int c;
-
-        static struct option long_options[] = {
-                { .name = "port",     .has_arg = 1, .val = 'p' },
-                { .name = "ib-dev",   .has_arg = 1, .val = 'd' },
-                { .name = "ib-port",  .has_arg = 1, .val = 'i' },
-                { .name = "size",     .has_arg = 1, .val = 's' },
-                { .name = "mtu",      .has_arg = 1, .val = 'm' },
-                { .name = "rx-depth", .has_arg = 1, .val = 'r' },
-                { .name = "iters",    .has_arg = 1, .val = 'n' },
-                { .name = "sl",       .has_arg = 1, .val = 'l' },
-                { .name = "events",   .has_arg = 0, .val = 'e' },
-                { .name = "gid-idx",  .has_arg = 1, .val = 'g' },
-                { 0 }
-        };
-
-        c = getopt_long(argc, argv, "p:d:i:s:m:r:n:l:eg:", long_options, NULL);
-        if (c == -1)
-            break;
-
-        switch (c) {
-        case 'p':
-            port = strtol(optarg, NULL, 0);
-            if (port < 0 || port > 65535) {
-                usage(argv[0]);
-                return 1;
-            }
-            break;
-
-        case 'd':
-            ib_devname = strdup(optarg);
-            break;
-
-        case 'i':
-            ib_port = strtol(optarg, NULL, 0);
-            if (ib_port < 0) {
-                usage(argv[0]);
-                return 1;
-            }
-            break;
-
-        case 's':
-            size = strtol(optarg, NULL, 0);
-            break;
-
-        case 'm':
-            mtu = pp_mtu_to_enum(strtol(optarg, NULL, 0));
-            if (mtu < 0) {
-                usage(argv[0]);
-                return 1;
-            }
-            break;
-
-        case 'r':
-            rx_depth = strtol(optarg, NULL, 0);
-            break;
-
-        case 'n':
-            iters = strtol(optarg, NULL, 0);
-            break;
-
-        case 'l':
-            sl = strtol(optarg, NULL, 0);
-            break;
-
-        case 'e':
-            ++use_event;
-            break;
-
-        case 'g':
-            gidx = strtol(optarg, NULL, 0);
-            break;
-
-        default:
-            usage(argv[0]);
-            return 1;
-        }
-    }
-
-    if (optind == argc - 1) // If in case of client (./file_name <servername>)
-        servername = strdup(argv[optind]);
-    else if (optind < argc) {
-        usage(argv[0]);
-        return 1;
-    }
 
     page_size = sysconf(_SC_PAGESIZE);
 
@@ -907,12 +737,12 @@ int main(int argc, char *argv[])
         if (pp_connect_ctx(ctx, ib_port, my_dest.psn, mtu, sl, rem_dest, gidx))
             return 1;
 
-    // Start of code
-    if (servername) {
-        client_send_operation(max_size, size_step, iters, ctx, tx_depth);
-    } else {
-        server_recv_operation(ctx, iters, max_size, size_step);
-    }
+    // // Start of code
+    // if (servername) {
+    //     client_send_operation(max_size, size_step, iters, ctx, tx_depth);
+    // } else {
+    //     server_recv_operation(ctx, iters, max_size, size_step);
+    // }
 
     ibv_free_device_list(dev_list);
     free(rem_dest);
