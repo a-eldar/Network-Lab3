@@ -54,29 +54,29 @@ void wire_gid_to_gid(const char *wgid, union ibv_gid *gid);
 
 void gid_to_wire_gid(const union ibv_gid *gid, char wgid[]);
 
-static int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
+int pp_connect_ctx(struct pingpong_context *ctx, int port, int my_psn,
                           enum ibv_mtu mtu, int sl,
                           struct pingpong_dest *dest, int sgid_idx);
 
                         
-static struct pingpong_dest *pp_client_exch_dest(const char *servername, int port,
+struct pingpong_dest *pp_client_exch_dest(const char *servername, int port,
                                                  const struct pingpong_dest *my_dest);
 
-static struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
+struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
                                                  int ib_port, enum ibv_mtu mtu,
                                                  int port, int sl,
                                                  const struct pingpong_dest *my_dest,
                                                  int sgid_idx);
 
-//static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
-//                                             int rx_depth, int tx_depth, int port,
-//                                             int use_event, int is_server);
+static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
+                                            int rx_depth, int tx_depth, int port,
+                                            int use_event, int is_server);
 
 int pp_close_ctx(struct pingpong_context *ctx);
 
-static int pp_post_recv(struct pingpong_context *ctx, int n);
+int pp_post_recv(struct pingpong_context *ctx, int n);
 
-static int pp_post_send(struct pingpong_context *ctx);
+int pp_post_send(struct pingpong_context *ctx);
 
 int pp_wait_completions(struct pingpong_context *ctx, int iters);
 
