@@ -68,7 +68,7 @@ struct pingpong_dest *pp_server_exch_dest(struct pingpong_context *ctx,
                                                  const struct pingpong_dest *my_dest,
                                                  int sgid_idx);
 
-static struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
+struct pingpong_context *pp_init_ctx(struct ibv_device *ib_dev, int size,
                                             int rx_depth, int tx_depth, int port,
                                             int use_event, int is_server);
 
