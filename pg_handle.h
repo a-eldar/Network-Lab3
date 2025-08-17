@@ -3,6 +3,8 @@
 
 #include <infiniband/verbs.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdarg.h>
 
 #define DEBUG 1
 #define MAX_WR_ID 1000
