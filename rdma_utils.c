@@ -498,3 +498,14 @@ int pp_wait_completions(struct pingpong_context *ctx, int iters)
     }
     return 0;
 }
+
+void print_debug(const char *format, ...){
+    if (DEBUG) {
+        va_list args;
+        va_start(args, format);
+        fprintf(stderr, "DEBUG: ");
+         // Print the formatted string to stderr
+        vfprintf(stderr, format, args);
+        va_end(args);
+    }
+}

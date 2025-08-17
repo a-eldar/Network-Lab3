@@ -20,6 +20,8 @@
 #include "pg_handle.h"
 
 #define WC_BATCH (10)
+#define DEBUG 1
+
 
 // Additional Definitions:
 #define BITS_IN_BYTE (8)
@@ -81,5 +83,6 @@ int pp_post_send(struct pingpong_context *ctx);
 int pp_wait_completions(struct pingpong_context *ctx, int iters);
 
 
+void print_debug(const char *format, ...);
 
 #endif // RDMA_UTILS_H
