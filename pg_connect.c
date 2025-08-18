@@ -19,7 +19,10 @@ static int tcp_connect(const char* host, int port) {
 	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
 	int rc = getaddrinfo(host, portstr, &hints, &res);
-	if (rc != 0) return -1;
+	if (rc != 0) {
+		if (DEBUG) fprintf(stderr, "[tcp_connect] getaddrinfo(%s:%d) failed: %s\n", host, port, gai_strerror(rc));
+		return -1;
+	}
 	int sock = -1;
 	for (rp = res; rp != NULL; rp = rp->ai_next) {
 		sock = (int)socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
@@ -43,10 +46,12 @@ static int tcp_listen_any(int port) {
 	addr.sin6_addr = in6addr_any;
 	addr.sin6_port = htons((uint16_t)port);
 	if (bind(sock, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+		if (DEBUG) fprintf(stderr, "[tcp_listen_any] bind port %d failed: %s\n", port, strerror(errno));
 		close(sock);
 		return -1;
 	}
 	if (listen(sock, 8) != 0) {
+		if (DEBUG) fprintf(stderr, "[tcp_listen_any] listen port %d failed: %s\n", port, strerror(errno));
 		close(sock);
 		return -1;
 	}
@@ -97,7 +102,10 @@ static int create_qp(PGHandle* h, struct ibv_qp** out_qp) {
 	attr.cap.max_send_sge = 1;
 	attr.cap.max_recv_sge = 1;
 	struct ibv_qp* qp = ibv_create_qp(h->pd, &attr);
-	if (!qp) return -1;
+	if (!qp) {
+		if (DEBUG) fprintf(stderr, "[R%d] ibv_create_qp failed\n", h->my_rank);
+		return -1;
+	}
 	*out_qp = qp;
 	return 0;
 }
@@ -110,7 +118,8 @@ static int qp_to_init(struct ibv_qp* qp, uint8_t port) {
 	attr.pkey_index = 0;
 	attr.qp_access_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ;
 	int mask = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
-	return ibv_modify_qp(qp, &attr, mask);
+	int rc = ibv_modify_qp(qp, &attr, mask);
+	return rc;
 }
 
 static int qp_to_rtr(struct ibv_qp* qp, const PgRemoteInfo* rmt, uint8_t port, enum ibv_mtu mtu) {
@@ -136,7 +145,8 @@ static int qp_to_rtr(struct ibv_qp* qp, const PgRemoteInfo* rmt, uint8_t port, e
 	}
 	int mask = IBV_QP_STATE | IBV_QP_AV | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN |
 			IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER;
-	return ibv_modify_qp(qp, &attr, mask);
+	int rc = ibv_modify_qp(qp, &attr, mask);
+	return rc;
 }
 
 static int qp_to_rts(struct ibv_qp* qp) {
@@ -150,7 +160,8 @@ static int qp_to_rts(struct ibv_qp* qp) {
 	attr.max_rd_atomic = 1;
 	int mask = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY |
 			IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
-	return ibv_modify_qp(qp, &attr, mask);
+	int rc = ibv_modify_qp(qp, &attr, mask);
+	return rc;
 }
 
 static int query_lid(struct ibv_context* ctx, uint8_t port, uint16_t* lid_out) {
@@ -163,17 +174,30 @@ static int query_lid(struct ibv_context* ctx, uint8_t port, uint16_t* lid_out) {
 static int pick_first_device(PGHandle* h) {
 	int num = 0;
 	struct ibv_device** devs = ibv_get_device_list(&num);
-	if (!devs || num == 0) return -1;
+	if (!devs || num == 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] No RDMA devices found\n", h->my_rank);
+		return -1;
+	}
 	h->context = ibv_open_device(devs[0]);
 	ibv_free_device_list(devs);
-	return h->context ? 0 : -1;
+	if (!h->context) {
+		if (DEBUG) fprintf(stderr, "[R%d] ibv_open_device failed\n", h->my_rank);
+		return -1;
+	}
+	return 0;
 }
 
 static int alloc_basic_resources(PGHandle* h) {
 	h->pd = ibv_alloc_pd(h->context);
-	if (!h->pd) return -1;
+	if (!h->pd) {
+		if (DEBUG) fprintf(stderr, "[R%d] ibv_alloc_pd failed\n", h->my_rank);
+		return -1;
+	}
 	h->cq = ibv_create_cq(h->context, PG_DEFAULT_CQ_DEPTH, NULL, NULL, 0);
-	if (!h->cq) return -1;
+	if (!h->cq) {
+		if (DEBUG) fprintf(stderr, "[R%d] ibv_create_cq failed\n", h->my_rank);
+		return -1;
+	}
 	return 0;
 }
 
@@ -183,11 +207,21 @@ static int register_side_buffers(PGHandle* h, int right_side) {
 	struct ibv_mr **ms = right_side ? &h->mr_send_right : &h->mr_send_left;
 	struct ibv_mr **mr = right_side ? &h->mr_recv_right : &h->mr_recv_left;
 	size_t alloc_size = (h->max_message_bytes + 4095) & ~((size_t)4095);
-	if (posix_memalign(sendbuf, 4096, alloc_size) != 0) return -1;
-	if (posix_memalign(recvbuf, 4096, alloc_size) != 0) return -1;
+	if (posix_memalign(sendbuf, 4096, alloc_size) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] posix_memalign(sendbuf) failed\n", h->my_rank);
+		return -1;
+	}
+	if (posix_memalign(recvbuf, 4096, alloc_size) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] posix_memalign(recvbuf) failed\n", h->my_rank);
+		return -1;
+	}
 	*ms = ibv_reg_mr(h->pd, *sendbuf, alloc_size, IBV_ACCESS_LOCAL_WRITE);
 	*mr = ibv_reg_mr(h->pd, *recvbuf, alloc_size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ);
-	return (*ms && *mr) ? 0 : -1;
+	if (!*ms || !*mr) {
+		if (DEBUG) fprintf(stderr, "[R%d] ibv_reg_mr failed (send_mr=%p recv_mr=%p)\n", h->my_rank, (void*)*ms, (void*)*mr);
+		return -1;
+	}
+	return 0;
 }
 
 static int exchange_info(int lsock, int csock, struct ibv_qp* my_qp, PGHandle* h, PgRemoteInfo* out_remote, int right_side) {
@@ -206,9 +240,15 @@ static int exchange_info(int lsock, int csock, struct ibv_qp* my_qp, PGHandle* h
 	}
 	fill_gid(h->context, h->ib_port, msg.gid, (int*)&msg.has_gid);
 	// Send then recv
-	if (send(csock, &msg, sizeof(msg), 0) != sizeof(msg)) return -1;
+	if (send(csock, &msg, sizeof(msg), 0) != sizeof(msg)) {
+		if (DEBUG) fprintf(stderr, "[R%d] exchange_info send failed: %s\n", h->my_rank, strerror(errno));
+		return -1;
+	}
 	ExchangeMsg peer;
-	if (recv(csock, &peer, sizeof(peer), MSG_WAITALL) != sizeof(peer)) return -1;
+	if (recv(csock, &peer, sizeof(peer), MSG_WAITALL) != sizeof(peer)) {
+		if (DEBUG) fprintf(stderr, "[R%d] exchange_info recv failed: %s\n", h->my_rank, strerror(errno));
+		return -1;
+	}
 	memset(out_remote, 0, sizeof(*out_remote));
 	out_remote->qp_num = peer.qp_num;
 	out_remote->lid = peer.lid;
@@ -229,19 +269,46 @@ int pg_connect_ring(char** serverlist, int len, int idx, PGHandle* h) {
 	h->ib_port = PG_DEFAULT_IB_PORT;
 	h->max_message_bytes = PG_MAX_MESSAGE_BYTES;
 
-	if (pick_first_device(h) != 0) return -1;
-	if (alloc_basic_resources(h) != 0) return -1;
-	if (register_side_buffers(h, 0) != 0) return -1;
-	if (register_side_buffers(h, 1) != 0) return -1;
+	if (pick_first_device(h) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] pick_first_device failed\n", idx);
+		return -1;
+	}
+	if (alloc_basic_resources(h) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] alloc_basic_resources failed\n", idx);
+		return -1;
+	}
+	if (register_side_buffers(h, 0) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] register_side_buffers(left) failed\n", idx);
+		return -1;
+	}
+	if (register_side_buffers(h, 1) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] register_side_buffers(right) failed\n", idx);
+		return -1;
+	}
 
-	if (create_qp(h, &h->qp_left) != 0) return -1;
-	if (create_qp(h, &h->qp_right) != 0) return -1;
-	if (qp_to_init(h->qp_left, h->ib_port) != 0) return -1;
-	if (qp_to_init(h->qp_right, h->ib_port) != 0) return -1;
+	if (create_qp(h, &h->qp_left) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] create_qp(left) failed\n", idx);
+		return -1;
+	}
+	if (create_qp(h, &h->qp_right) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] create_qp(right) failed\n", idx);
+		return -1;
+	}
+	if (qp_to_init(h->qp_left, h->ib_port) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] qp_to_init(left) failed\n", idx);
+		return -1;
+	}
+	if (qp_to_init(h->qp_right, h->ib_port) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] qp_to_init(right) failed\n", idx);
+		return -1;
+	}
 
 	int my_port = PG_DEFAULT_TCP_PORT + idx; // unique port per rank for simplicity
 	int lsock = tcp_listen_any(my_port);
-	if (lsock < 0) return -1;
+	if (lsock < 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] tcp_listen_any(%d) failed\n", idx, my_port);
+		return -1;
+	}
 
 	// Connect to right neighbor, receive from left neighbor.
 	int right_port = PG_DEFAULT_TCP_PORT + h->right_rank;
@@ -251,6 +318,7 @@ int pg_connect_ring(char** serverlist, int len, int idx, PGHandle* h) {
 		for (int attempts = 0; attempts < 200; ++attempts) {
 			csock_right = tcp_connect(serverlist[h->right_rank], right_port);
 			if (csock_right >= 0) break;
+			if (DEBUG && (attempts % 20 == 0)) fprintf(stderr, "[R%d] attempt %d: connect to %s:%d failed\n", idx, attempts, serverlist[h->right_rank], right_port);
 			usleep(100 * 1000);
 		}
 		if (DEBUG) fprintf(stderr, "[R%d] connect to right %d: %s\n", idx, h->right_rank, csock_right >= 0 ? "ok" : "fail");
@@ -260,13 +328,17 @@ int pg_connect_ring(char** serverlist, int len, int idx, PGHandle* h) {
 	int csock_left = -1;
 	// Accept from left
 	csock_left = tcp_accept(lsock);
-	if (csock_left < 0) return -1;
+	if (csock_left < 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] accept from left failed: %s\n", idx, strerror(errno));
+		return -1;
+	}
 
 	if (idx != 0) {
 		// Others connect to right after accepting left to avoid deadlock
 		for (int attempts = 0; attempts < 200; ++attempts) {
 			csock_right = tcp_connect(serverlist[h->right_rank], right_port);
 			if (csock_right >= 0) break;
+			if (DEBUG && (attempts % 20 == 0)) fprintf(stderr, "[R%d] attempt %d: connect to %s:%d failed\n", idx, attempts, serverlist[h->right_rank], right_port);
 			usleep(100 * 1000);
 		}
 		if (DEBUG) fprintf(stderr, "[R%d] connect to right %d: %s\n", idx, h->right_rank, csock_right >= 0 ? "ok" : "fail");
@@ -274,18 +346,36 @@ int pg_connect_ring(char** serverlist, int len, int idx, PGHandle* h) {
 	}
 
 	// Exchange QP info with both neighbors
-	if (exchange_info(lsock, csock_right, h->qp_right, h, &h->remote_right, 1) != 0) return -1;
-	if (exchange_info(lsock, csock_left, h->qp_left, h, &h->remote_left, 0) != 0) return -1;
+	if (exchange_info(lsock, csock_right, h->qp_right, h, &h->remote_right, 1) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] exchange_info(right) failed\n", idx);
+		return -1;
+	}
+	if (exchange_info(lsock, csock_left, h->qp_left, h, &h->remote_left, 0) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] exchange_info(left) failed\n", idx);
+		return -1;
+	}
 
 	close(csock_right);
 	close(csock_left);
 	close(lsock);
 
 	// Move QPs to RTR/RTS
-	if (qp_to_rtr(h->qp_right, &h->remote_right, h->ib_port, PG_DEFAULT_MTU) != 0) return -1;
-	if (qp_to_rtr(h->qp_left, &h->remote_left, h->ib_port, PG_DEFAULT_MTU) != 0) return -1;
-	if (qp_to_rts(h->qp_right) != 0) return -1;
-	if (qp_to_rts(h->qp_left) != 0) return -1;
+	if (qp_to_rtr(h->qp_right, &h->remote_right, h->ib_port, PG_DEFAULT_MTU) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] qp_to_rtr(right) failed\n", idx);
+		return -1;
+	}
+	if (qp_to_rtr(h->qp_left, &h->remote_left, h->ib_port, PG_DEFAULT_MTU) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] qp_to_rtr(left) failed\n", idx);
+		return -1;
+	}
+	if (qp_to_rts(h->qp_right) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] qp_to_rts(right) failed\n", idx);
+		return -1;
+	}
+	if (qp_to_rts(h->qp_left) != 0) {
+		if (DEBUG) fprintf(stderr, "[R%d] qp_to_rts(left) failed\n", idx);
+		return -1;
+	}
 
 	if (DEBUG) fprintf(stderr, "[R%d] Connected: left=%d right=%d\n", idx, h->left_rank, h->right_rank);
 	return 0;
