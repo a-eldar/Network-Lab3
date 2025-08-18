@@ -200,7 +200,7 @@ static const char *wc_status_str(int status) {
         case IBV_WC_REM_OP_ERR: return "IBV_WC_REM_OP_ERR";
         case IBV_WC_RETRY_EXC_ERR: return "IBV_WC_RETRY_EXC_ERR";
         case IBV_WC_RNR_RETRY_EXC_ERR: return "IBV_WC_RNR_RETRY_EXC_ERR";
-        // case IBV_WC_TIMEOUT_ERR: return "IBV_WC_TIMEOUT_ERR";
+        // case IBV_WC_TIMEOUT_ERR: return "IBV_WC_TIMEOUT_ERR"; 
         case IBV_WC_RESP_TIMEOUT_ERR: return "IBV_WC_RESP_TIMEOUT_ERR";
         case IBV_WC_GENERAL_ERR: return "IBV_WC_GENERAL_ERR";
         default: return "IBV_WC_UNKNOWN";
