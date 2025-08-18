@@ -1,121 +1,89 @@
-//#include "pg_allreduce.h"
-#include "pg_connect.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
-int main(int argc, char *argv[]) {
-    if (argc < 4) {
-        fprintf(stderr, "Usage: %s <server_index> <total_servers> <server1> [server2] ...\n", argv[0]);
-        return 1;
-    }
-    
-    int idx = atoi(argv[1]);
-    int total_servers = atoi(argv[2]);
-    
-    if (argc != total_servers + 3) {
-        fprintf(stderr, "Number of server names doesn't match total_servers\n");
-        return 1;
-    }
-    
-    // Build server list
-    char **serverlist = malloc(total_servers * sizeof(char*));
-    for (int i = 0; i < total_servers; i++) {
-        serverlist[i] = argv[i + 3];
-    }
-    
-    PGHandle pg_handle;
-    
-    // Connect to process group
-    printf("Server %d: Connecting to process group...\n", idx);
-    if (connect_process_group(serverlist, total_servers, idx, &pg_handle) < 0) {
-        fprintf(stderr, "Failed to connect to process group\n");
-        free(serverlist);
-        return 1;
-    }
-    /*
-    // Test with integers
-    int count = 100;
-    int *sendbuf = malloc(count * sizeof(int));
-    int *recvbuf = malloc(count * sizeof(int));
-    
-    // Initialize send buffer with server-specific values
-    for (int i = 0; i < count; i++) {
-        sendbuf[i] = idx + 1; // Each server contributes its index + 1
-    }
-    
-    printf("Server %d: Performing integer sum all-reduce...\n", idx);
-    if (pg_all_reduce(sendbuf, recvbuf, count, INT, SUM, &pg_handle) < 0) {
-        fprintf(stderr, "All-reduce failed\n");
-        pg_close(&pg_handle);
-        free(serverlist);
-        free(sendbuf);
-        free(recvbuf);
-        return 1;
-    }
-    
-    // Verify results - sum should be 1+2+...+n = n*(n+1)/2
-    int expected = total_servers * (total_servers + 1) / 2;
-    int success = 1;
-    for (int i = 0; i < count; i++) {
-        if (recvbuf[i] != expected) {
-            printf("Server %d: Error at index %d: expected %d, got %d\n", 
-                   idx, i, expected, recvbuf[i]);
-            success = 0;
-            break;
-        }
-    }
-    
-    if (success) {
-        printf("Server %d: Integer sum all-reduce successful! Result = %d\n", idx, expected);
-    }
-    
-    // Test with doubles
-    double *dsendbuf = malloc(count * sizeof(double));
-    double *drecvbuf = malloc(count * sizeof(double));
-    
-    for (int i = 0; i < count; i++) {
-        dsendbuf[i] = (idx + 1) * 1.5;
-    }
-    
-    printf("Server %d: Performing double sum all-reduce...\n", idx);
-    if (pg_all_reduce(dsendbuf, drecvbuf, count, DOUBLE, SUM, &pg_handle) < 0) {
-        fprintf(stderr, "Double all-reduce failed\n");
-        pg_close(&pg_handle);
-        free(serverlist);
-        free(sendbuf);
-        free(recvbuf);
-        free(dsendbuf);
-        free(drecvbuf);
-        return 1;
-    }
-    
-    double dexpected = total_servers * (total_servers + 1) / 2.0 * 1.5;
-    success = 1;
-    for (int i = 0; i < count; i++) {
-        if (drecvbuf[i] != dexpected) {
-            printf("Server %d: Error at index %d: expected %f, got %f\n", 
-                   idx, i, dexpected, drecvbuf[i]);
-            success = 0;
-            break;
-        }
-    }
-    
-    if (success) {
-        printf("Server %d: Double sum all-reduce successful! Result = %f\n", idx, dexpected);
-    }
-    
-    // Cleanup
-    pg_close(&pg_handle);
-    
-    free(serverlist);
-    free(sendbuf);
-    free(recvbuf);
-    free(dsendbuf);
-    free(drecvbuf);
-    
-    printf("Server %d: Test completed\n", idx);
-    
-    return 0;
-    */
+#include "pg_allreduce.h"
+
+static void usage(const char* prog) {
+	fprintf(stderr, "Usage: %s -myindex <idx> -list <host1,host2,...>\n", prog);
 }
+
+int main(int argc, char** argv) {
+	int myindex = -1;
+	char* list = NULL;
+	for (int i = 1; i < argc; ++i) {
+		if (strcmp(argv[i], "-myindex") == 0 && i + 1 < argc) myindex = atoi(argv[++i]);
+		else if (strcmp(argv[i], "-list") == 0 && i + 1 < argc) list = argv[++i];
+	}
+	if (myindex < 0 || !list) {
+		usage(argv[0]);
+		return 1;
+	}
+
+	// Parse list
+	int count = 1;
+	for (const char* c = list; *c; ++c) if (*c == ',') ++count;
+	char** servers = (char**)calloc((size_t)count, sizeof(char*));
+	char* tmp = strdup(list);
+	int idx = 0;
+	char* saveptr = NULL;
+	for (char* tok = strtok_r(tmp, ",", &saveptr); tok; tok = strtok_r(NULL, ",", &saveptr)) {
+		servers[idx++] = strdup(tok);
+	}
+
+	PGHandle h;
+	if (connect_process_group(servers, count, myindex, &h) != 0) {
+		fprintf(stderr, "Failed to connect process group\n");
+		return 2;
+	}
+
+	// Connectivity test: send a small message to right neighbor and receive from left.
+	const char* msg = "hello";
+	size_t msglen = strlen(msg) + 1;
+	memcpy(h.sendbuf_right, msg, msglen);
+	// Post recv on left and send on right
+	struct ibv_sge sge_send = { .addr = (uintptr_t)h.sendbuf_right, .length = (uint32_t)msglen, .lkey = h.mr_send_right->lkey };
+	struct ibv_send_wr wr_send; memset(&wr_send, 0, sizeof(wr_send));
+	wr_send.sg_list = &sge_send; wr_send.num_sge = 1; wr_send.opcode = IBV_WR_SEND; wr_send.send_flags = IBV_SEND_SIGNALED;
+	struct ibv_send_wr* bad_send = NULL;
+
+	struct ibv_sge sge_recv = { .addr = (uintptr_t)h.recvbuf_left, .length = (uint32_t)msglen, .lkey = h.mr_recv_left->lkey };
+	struct ibv_recv_wr wr_recv; memset(&wr_recv, 0, sizeof(wr_recv));
+	wr_recv.sg_list = &sge_recv; wr_recv.num_sge = 1;
+	struct ibv_recv_wr* bad_recv = NULL;
+
+	if (ibv_post_recv(h.qp_left, &wr_recv, &bad_recv) != 0) { fprintf(stderr, "post recv failed\n"); return 3; }
+	if (ibv_post_send(h.qp_right, &wr_send, &bad_send) != 0) { fprintf(stderr, "post send failed\n"); return 3; }
+	struct ibv_wc wc;
+	int got = 0;
+	while (got < 2) {
+		int n = ibv_poll_cq(h.cq, 1, &wc);
+		if (n > 0) {
+			if (wc.status != IBV_WC_SUCCESS) { fprintf(stderr, "wc status %d\n", wc.status); return 3; }
+			++got;
+		}
+	}
+	if (strcmp((char*)h.recvbuf_left, msg) == 0) {
+		fprintf(stderr, "[R%d] Connectivity test ok: '%s'\n", h.my_rank, (char*)h.recvbuf_left);
+	} else {
+		fprintf(stderr, "[R%d] Connectivity test mismatch: '%s'\n", h.my_rank, (char*)h.recvbuf_left);
+	}
+
+	// Small all-reduce test with ints
+	int val = h.my_rank + 1;
+	int out = 0;
+	if (pg_all_reduce(&val, &out, 1, INT, SUM, &h) != 0) {
+		fprintf(stderr, "all_reduce failed\n");
+		return 4;
+	}
+	int expected = (count * (count + 1)) / 2; // sum 1..N
+	fprintf(stderr, "[R%d] all_reduce result=%d expected=%d\n", h.my_rank, out, expected);
+
+	pg_close(&h);
+	for (int i = 0; i < count; ++i) free(servers[i]);
+	free(servers);
+	free(tmp);
+	return 0;
+}
+

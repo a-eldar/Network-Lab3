@@ -1,36 +1,22 @@
 #include "pg_handle.h"
-#include "rdma_utils.h"
-#include <stdlib.h>
-#include <stdio.h>
 
-int pg_close(PGHandle* pg_handle) {
-    if (!pg_handle) {
-        return -1;
-    }
-    
-    // Clean up RDMA connections
-    if (pg_handle->left_conn) {
-        cleanup_rdma_connection(pg_handle->left_conn);
-        free(pg_handle->left_conn);
-        pg_handle->left_conn = NULL;
-    }
-    
-    if (pg_handle->right_conn) {
-        cleanup_rdma_connection(pg_handle->right_conn);
-        free(pg_handle->right_conn);
-        pg_handle->right_conn = NULL;
-    }
-    
-    // Free work buffer
-    if (pg_handle->work_buffer) {
-        free(pg_handle->work_buffer);
-        pg_handle->work_buffer = NULL;
-    }
-    
-    // Reset connection status
-    pg_handle->connected = 0;
-    
-    printf("Server %d: Closed process group connections\n", pg_handle->server_idx);
-    
-    return 0;
+#include <stdlib.h>
+
+int pg_close(PGHandle* h) {
+	if (!h) return 0;
+	if (h->qp_left) ibv_destroy_qp(h->qp_left);
+	if (h->qp_right) ibv_destroy_qp(h->qp_right);
+	if (h->mr_send_left) ibv_dereg_mr(h->mr_send_left);
+	if (h->mr_recv_left) ibv_dereg_mr(h->mr_recv_left);
+	if (h->mr_send_right) ibv_dereg_mr(h->mr_send_right);
+	if (h->mr_recv_right) ibv_dereg_mr(h->mr_recv_right);
+	if (h->sendbuf_left) free(h->sendbuf_left);
+	if (h->recvbuf_left) free(h->recvbuf_left);
+	if (h->sendbuf_right) free(h->sendbuf_right);
+	if (h->recvbuf_right) free(h->recvbuf_right);
+	if (h->cq) ibv_destroy_cq(h->cq);
+	if (h->pd) ibv_dealloc_pd(h->pd);
+	if (h->context) ibv_close_device(h->context);
+	return 0;
 }
+
