@@ -348,6 +348,53 @@ static int post_send(pg_conn_t *pg, int peer, void *buf, size_t len, uint32_t im
     }
     return 0;
 }
+/* helper: convert wc.status to a string for common statuses */
+static const char *wc_status_str(int status) {
+    switch (status) {
+        case IBV_WC_SUCCESS: return "IBV_WC_SUCCESS";
+        case IBV_WC_LOC_LEN_ERR: return "IBV_WC_LOC_LEN_ERR";
+        case IBV_WC_LOC_QP_OP_ERR: return "IBV_WC_LOC_QP_OP_ERR";
+        case IBV_WC_LOC_EEC_OP_ERR: return "IBV_WC_LOC_EEC_OP_ERR";
+        case IBV_WC_LOC_PROT_ERR: return "IBV_WC_LOC_PROT_ERR";
+        case IBV_WC_WR_FLUSH_ERR: return "IBV_WC_WR_FLUSH_ERR";
+        case IBV_WC_MW_BIND_ERR: return "IBV_WC_MW_BIND_ERR";
+        case IBV_WC_BAD_RESP_ERR: return "IBV_WC_BAD_RESP_ERR";
+        case IBV_WC_LOC_ACCESS_ERR: return "IBV_WC_LOC_ACCESS_ERR";
+        case IBV_WC_REM_INV_REQ_ERR: return "IBV_WC_REM_INV_REQ_ERR";
+        case IBV_WC_REM_ACCESS_ERR: return "IBV_WC_REM_ACCESS_ERR";
+        case IBV_WC_REM_OP_ERR: return "IBV_WC_REM_OP_ERR";
+        case IBV_WC_RETRY_EXC_ERR: return "IBV_WC_RETRY_EXC_ERR";
+        case IBV_WC_RNR_RETRY_EXC_ERR: return "IBV_WC_RNR_RETRY_EXC_ERR";
+        case IBV_WC_TIMEOUT_ERR: return "IBV_WC_TIMEOUT_ERR";
+        case IBV_WC_RESP_TIMEOUT_ERR: return "IBV_WC_RESP_TIMEOUT_ERR";
+        case IBV_WC_GENERAL_ERR: return "IBV_WC_GENERAL_ERR";
+        default: return "IBV_WC_UNKNOWN";
+    }
+}
+
+/* Debugging poll: wait for 'want' completions; prints details for each */
+static int debug_poll_cq(struct ibv_cq *cq, int want) {
+    int got = 0;
+    while (got < want) {
+        struct ibv_wc wc;
+        int ne = ibv_poll_cq(cq, 1, &wc);
+        if (ne < 0) {
+            fprintf(stderr, "ibv_poll_cq error: %d\n", ne);
+            return -1;
+        }
+        if (ne == 0) continue;
+        got += 1;
+        if (wc.status != IBV_WC_SUCCESS) {
+            fprintf(stderr, "WC ERROR: status=%d (%s), opcode=%d, wr_id=%" PRIu64 ", vendor_err=%u, qp_num=%u\n",
+                    wc.status, wc_status_str(wc.status), wc.opcode, (unsigned long long)wc.wr_id, wc.vendor_err, wc.qp_num);
+            return -1;
+        } else {
+            /* success: still useful to print on verbose runs */
+            //fprintf(stderr, "WC OK: opcode=%d wr_id=%" PRIu64 " qp_num=%u\n", wc.opcode, (unsigned long long)wc.wr_id, wc.qp_num);
+        }
+    }
+    return 0;
+}
 
 /* poll cq until at least 'want' completions found or error (simple) */
 static int poll_cq(struct ibv_cq *cq, int want) {
@@ -455,13 +502,13 @@ int pg_all_reduce(void *sendbuf_v, void *recvbuf_v, int count, int datatype_byte
             return -1;
         }
         /* wait for send completion */
-        if (poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "send completion failed\n"); return -1; }
+        if (debug_poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "send completion failed\n"); return -1; }
 
         /* wait for recv completion (one from prev) and reduce into appropriate local place:
            ibv_poll_cq returns a wc with wr_id - but we didn't set wr_id. The data is already in the recv buffer region used in post_recv.
            To find which buffer was filled, we must track where we posted them; we used rotating slots above: (s % (n-1)).
         */
-        if (poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "recv completion failed\n"); return -1; }
+        if (debug_poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "recv completion failed\n"); return -1; }
         /* The receive for this step was posted into recv_buf offset (s % (n-1))*chunk_bytes */
         void *just_recv = (char*)pg->recv_buf + (s % (n-1)) * chunk_bytes;
         /* compute destination chunk index to reduce into: dst_idx = (rank - s -1 + n) % n ? canonical algorithm reduces into (rank - s -1) */
@@ -487,8 +534,8 @@ int pg_all_reduce(void *sendbuf_v, void *recvbuf_v, int count, int datatype_byte
         void *recv_ptr = (char*)pg->recv_buf + ((rank - s - 1 + n) % n) * chunk_bytes;
         if (post_recv(pg, prev, recv_ptr, chunk_bytes) != 0) { fprintf(stderr, "post_recv allgather failed\n"); return -1; }
         if (post_send(pg, next, send_ptr, chunk_bytes, 0) != 0) { fprintf(stderr, "post_send allgather failed\n"); return -1; }
-        if (poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "send completion allgather failed\n"); return -1; }
-        if (poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "recv completion allgather failed\n"); return -1; }
+        if (debug_poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "send completion allgather failed\n"); return -1; }
+        if (debug_poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "recv completion allgather failed\n"); return -1; }
     }
 
     /* copy final gathered vector from recv_buf into recvbuf_v (only first 'count' elements) */
