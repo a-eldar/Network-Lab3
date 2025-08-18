@@ -204,7 +204,6 @@ static const char *wc_status_str(int status) {
         case IBV_WC_RESP_TIMEOUT_ERR: return "IBV_WC_RESP_TIMEOUT_ERR";
         case IBV_WC_GENERAL_ERR: return "IBV_WC_GENERAL_ERR";
         default: return "IBV_WC_UNKNOWN";
-        // hi
     }
 }
 
