@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -75,7 +76,7 @@ static void fill_gid(struct ibv_context* ctx, uint8_t port, uint8_t gid[16], int
 		*has_gid = 0;
 		return;
 	}
-	struct ibv_gid tmpgid;
+	union ibv_gid tmpgid;
 	if (ibv_query_gid(ctx, port, 0, &tmpgid) == 0) {
 		memcpy(gid, &tmpgid, 16);
 		*has_gid = 1;
