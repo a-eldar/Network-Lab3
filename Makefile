@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -O2 -Wall -g
-LIBS = -libverbs
+LIBS = -libverbs -lrdmacm
 
 all: test_ring
 
@@ -11,7 +11,7 @@ test_ring.o: test_ring.c pg.h
 	$(CC) $(CFLAGS) -c test_ring.c -o test_ring.o
 
 test_ring: pg.o test_ring.o
-	$(CC) $(CFLAGS) pg.o test_ring.o -o test_ring -libverbs
+	$(CC) $(CFLAGS) pg.o test_ring.o -o test_ring $(LIBS)
 
 clean:
 	rm -f *.o test_ring

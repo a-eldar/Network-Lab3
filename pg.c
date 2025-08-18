@@ -9,17 +9,20 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <pthread.h>
+#include <inttypes.h>
 
-#define CHECK(x) do { if (!(x)) { fprintf(stderr, "CHECK FAILED: %s:%d\n", __FILE__, __LINE__); exit(1); } } while(0)
+/* Simple CHECK macro */
+#define CHECK_RET(x, msg) do { if ((x) != 0) { fprintf(stderr, "%s: %s\n", msg, strerror(errno)); } } while(0)
+
+/* encode wr_id values so we can see send/recv and peer */
+#define WRID_SEND(peer)  ( (uint64_t)(peer) << 32 | 0x1 )
+#define WRID_RECV(peer)  ( (uint64_t)(peer) << 32 | 0x2 )
 
 typedef struct peer_info {
     uint16_t lid;
     uint32_t qpn;
     uint32_t psn;
-    union {
-        uint8_t gid[16];
-    } gid;
+    union { uint8_t gid[16]; } gid;
     uint64_t vaddr;
     uint32_t rkey;
 } peer_info_t;
@@ -32,18 +35,17 @@ struct pg_conn {
     struct ibv_context *ctx;
     struct ibv_pd *pd;
     struct ibv_cq *cq;
-    struct ibv_qp **qps;         /* per-peer QP */
-    peer_info_t *remote_info;    /* array of length nprocs */
+    struct ibv_qp **qps;
+    peer_info_t *remote_info;
     struct ibv_mr *mr_send;
     struct ibv_mr *mr_recv;
     void *send_buf;
     void *recv_buf;
     size_t buf_bytes;
     int sock_listen;
-    /* other bookkeeping */
 };
 
-/* TCP helpers to exchange peer_info */
+/* TCP helpers */
 static int tcp_listen(int port) {
     int s, opt = 1;
     struct sockaddr_in addr;
@@ -54,9 +56,7 @@ static int tcp_listen(int port) {
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     addr.sin_addr.s_addr = INADDR_ANY;
-    if (bind(s, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-        close(s); return -1;
-    }
+    if (bind(s, (struct sockaddr*)&addr, sizeof(addr)) < 0) { close(s); return -1; }
     if (listen(s, 8) < 0) { close(s); return -1; }
     return s;
 }
@@ -102,21 +102,20 @@ static int recv_all(int fd, void *buf, size_t len) {
     return 0;
 }
 
-/* Minimal helper to create QP */
+/* ibverbs helpers */
 static struct ibv_qp* create_qp(struct ibv_pd *pd, struct ibv_cq *cq) {
     struct ibv_qp_init_attr attr;
     memset(&attr, 0, sizeof(attr));
     attr.send_cq = cq;
     attr.recv_cq = cq;
-    attr.cap.max_send_wr = 128;
-    attr.cap.max_recv_wr = 128;
+    attr.cap.max_send_wr = 32;
+    attr.cap.max_recv_wr = 32;
     attr.cap.max_send_sge = 1;
     attr.cap.max_recv_sge = 1;
     attr.qp_type = IBV_QPT_RC;
     return ibv_create_qp(pd, &attr);
 }
 
-/* go to INIT */
 static int modify_qp_to_init(struct ibv_qp *qp) {
     struct ibv_qp_attr attr;
     memset(&attr, 0, sizeof(attr));
@@ -125,11 +124,9 @@ static int modify_qp_to_init(struct ibv_qp *qp) {
     attr.port_num = 1;
     attr.qp_access_flags = IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ;
     int flags = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
-    if (ibv_modify_qp(qp, &attr, flags)) return -1;
-    return 0;
+    return ibv_modify_qp(qp, &attr, flags);
 }
 
-/* go to RTR */
 static int modify_qp_to_rtr(struct ibv_qp *qp, uint32_t dest_qp_num, uint16_t dlid, uint8_t *dgid) {
     struct ibv_qp_attr attr;
     memset(&attr, 0, sizeof(attr));
@@ -148,11 +145,9 @@ static int modify_qp_to_rtr(struct ibv_qp *qp, uint32_t dest_qp_num, uint16_t dl
                 IBV_QP_PATH_MTU | IBV_QP_DEST_QPN |
                 IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC |
                 IBV_QP_MIN_RNR_TIMER;
-    if (ibv_modify_qp(qp, &attr, flags)) return -1;
-    return 0;
+    return ibv_modify_qp(qp, &attr, flags);
 }
 
-/* go to RTS */
 static int modify_qp_to_rts(struct ibv_qp *qp) {
     struct ibv_qp_attr attr;
     memset(&attr, 0, sizeof(attr));
@@ -165,11 +160,10 @@ static int modify_qp_to_rts(struct ibv_qp *qp) {
     int flags = IBV_QP_STATE | IBV_QP_TIMEOUT |
                 IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY |
                 IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
-    if (ibv_modify_qp(qp, &attr, flags)) return -1;
-    return 0;
+    return ibv_modify_qp(qp, &attr, flags);
 }
 
-/* parse host list (space-separated) */
+/* parse host list */
 static char **parse_host_list(const char *s, int *out_count) {
     char *copy = strdup(s);
     char *tok;
@@ -189,166 +183,7 @@ static char **parse_host_list(const char *s, int *out_count) {
     return arr;
 }
 
-/* main connect function */
-int connect_process_group(const char *host_list, int myrank, void **pg_handle_out) {
-    int i, ret = -1;
-    int nproc;
-    char **hosts = parse_host_list(host_list, &nproc);
-    if (nproc < 2) { fprintf(stderr, "need >=2 hosts\n"); return -1; }
-    if (myrank < 0 || myrank >= nproc) { fprintf(stderr, "invalid rank\n"); return -1; }
-
-    pg_conn_t *pg = calloc(1, sizeof(*pg));
-    pg->nprocs = nproc;
-    pg->myrank = myrank;
-    pg->hosts = hosts;
-
-    /* open device */
-    struct ibv_device **dev_list = ibv_get_device_list(NULL);
-    if (!dev_list) { perror("ibv_get_device_list"); goto out; }
-    pg->ctx = ibv_open_device(dev_list[0]);
-    ibv_free_device_list(dev_list);
-    if (!pg->ctx) { perror("ibv_open_device"); goto out; }
-    pg->pd = ibv_alloc_pd(pg->ctx);
-    if (!pg->pd) { perror("ibv_alloc_pd"); goto out; }
-    pg->cq = ibv_create_cq(pg->ctx, 512, NULL, NULL, 0);
-    if (!pg->cq) { perror("ibv_create_cq"); goto out; }
-
-    /* create QPs for each peer (including self for simplicity) */
-    pg->qps = calloc(nproc, sizeof(struct ibv_qp*));
-    for (i = 0; i < nproc; ++i) {
-        pg->qps[i] = create_qp(pg->pd, pg->cq);
-        if (!pg->qps[i]) { fprintf(stderr, "create_qp failed\n"); goto out; }
-        if (modify_qp_to_init(pg->qps[i]) != 0) { fprintf(stderr, "modify init failed\n"); goto out; }
-    }
-
-    /* allocate send/recv buffers and mr */
-    size_t default_count = 1024; /* user-level will use smaller; allocate generous */
-    pg->buf_bytes = default_count * sizeof(int32_t);
-    pg->send_buf = aligned_alloc(4096, pg->buf_bytes);
-    pg->recv_buf = aligned_alloc(4096, pg->buf_bytes);
-    memset(pg->send_buf, 0, pg->buf_bytes);
-    memset(pg->recv_buf, 0, pg->buf_bytes);
-    pg->mr_send = ibv_reg_mr(pg->pd, pg->send_buf, pg->buf_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
-    pg->mr_recv = ibv_reg_mr(pg->pd, pg->recv_buf, pg->buf_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
-    if (!pg->mr_send || !pg->mr_recv) { fprintf(stderr, "reg_mr failed\n"); goto out; }
-
-    /* Gather local info */
-    peer_info_t local;
-    memset(&local, 0, sizeof(local));
-    struct ibv_port_attr port_attr;
-    if (ibv_query_port(pg->ctx, 1, &port_attr)) { perror("ibv_query_port"); goto out; }
-    local.lid = port_attr.lid;
-    /* qpn: use first qp for now (all qps created); use its qp_num */
-    local.qpn = pg->qps[pg->myrank]->qp_num;
-    local.psn = 0;
-    /* gid left zero */
-    local.vaddr = (uintptr_t)pg->mr_send->addr;
-    local.rkey = pg->mr_send->rkey;
-
-    /* Exchange info with peers using TCP.
-       We adopt the common approach: for each peer j:
-         if myrank < j: connect to host j at port PG_PORT_BASE + j, send local, recv remote
-         else: listen on port PG_PORT_BASE + myrank, accept connection from j, recv remote then send local
-    */
-    int listen_sock = tcp_listen(PG_PORT_BASE + pg->myrank);
-    if (listen_sock < 0) { perror("tcp_listen"); goto out; }
-    pg->sock_listen = listen_sock;
-    pg->remote_info = calloc(nproc, sizeof(peer_info_t));
-
-    for (i = 0; i < nproc; ++i) {
-        if (i == pg->myrank) {
-            /* self */
-            pg->remote_info[i] = local;
-            continue;
-        }
-        if (pg->myrank < i) {
-            /* act as client */
-            int s = -1;
-            int tries = 0;
-            while ((s = tcp_connect_to_host(hosts[i], PG_PORT_BASE + i)) < 0 && tries < 60) {
-                tries++;
-                sleep(1);
-            }
-            if (s < 0) { fprintf(stderr, "connect to %s failed\n", hosts[i]); goto out; }
-            if (send_all(s, &local, sizeof(local)) != 0) { close(s); goto out; }
-            if (recv_all(s, &pg->remote_info[i], sizeof(peer_info_t)) != 0) { close(s); goto out; }
-            close(s);
-        } else {
-            /* accept connection from peer i */
-            int c = accept(listen_sock, NULL, NULL);
-            if (c < 0) { perror("accept"); goto out; }
-            /* peer sends first */
-            if (recv_all(c, &pg->remote_info[i], sizeof(peer_info_t)) != 0) { close(c); goto out; }
-            if (send_all(c, &local, sizeof(local)) != 0) { close(c); goto out; }
-            close(c);
-        }
-    }
-
-    /* Move QPs to RTR/RTS using remote qpn and lid */
-    for (i = 0; i < nproc; ++i) {
-        if (i == pg->myrank) continue;
-        if (modify_qp_to_rtr(pg->qps[i], pg->remote_info[i].qpn, pg->remote_info[i].lid, pg->remote_info[i].gid.gid) != 0) {
-            fprintf(stderr, "modify to rtr failed for peer %d\n", i); goto out;
-        }
-        if (modify_qp_to_rts(pg->qps[i]) != 0) {
-            fprintf(stderr, "modify to rts failed for peer %d\n", i); goto out;
-        }
-    }
-
-    *pg_handle_out = pg;
-    ret = 0;
-out:
-    if (ret != 0) {
-        /* free resources on error (simple) */
-        if (pg) {
-            if (pg->cq) ibv_destroy_cq(pg->cq);
-            if (pg->pd) ibv_dealloc_pd(pg->pd);
-            if (pg->ctx) ibv_close_device(pg->ctx);
-            free(pg);
-        }
-    }
-    return ret;
-}
-
-/* post a recv WR into QP's RQ (we use simple recv on each QP for safety) */
-static int post_recv(pg_conn_t *pg, int peer, void *buf, size_t len) {
-    struct ibv_sge sge;
-    struct ibv_recv_wr rr, *bad;
-    memset(&sge, 0, sizeof(sge));
-    sge.addr = (uintptr_t)buf;
-    sge.length = len;
-    sge.lkey = pg->mr_recv->lkey;
-    memset(&rr, 0, sizeof(rr));
-    rr.next = NULL;
-    rr.sg_list = &sge;
-    rr.num_sge = 1;
-    if (ibv_post_recv(pg->qps[peer], &rr, &bad)) {
-        return -1;
-    }
-    return 0;
-}
-
-/* post a send WR (IBV_WR_SEND) */
-static int post_send(pg_conn_t *pg, int peer, void *buf, size_t len, uint32_t imm) {
-    struct ibv_sge sge;
-    struct ibv_send_wr wr, *bad;
-    memset(&sge, 0, sizeof(sge));
-    sge.addr = (uintptr_t)buf;
-    sge.length = len;
-    sge.lkey = pg->mr_send->lkey;
-    memset(&wr, 0, sizeof(wr));
-    wr.next = NULL;
-    wr.sg_list = &sge;
-    wr.num_sge = 1;
-    wr.opcode = IBV_WR_SEND;
-    wr.send_flags = IBV_SEND_SIGNALED;
-    /* immediate not required here */
-    if (ibv_post_send(pg->qps[peer], &wr, &bad)) {
-        return -1;
-    }
-    return 0;
-}
-/* helper: convert wc.status to a string for common statuses */
+/* debug helpers */
 static const char *wc_status_str(int status) {
     switch (status) {
         case IBV_WC_SUCCESS: return "IBV_WC_SUCCESS";
@@ -372,7 +207,6 @@ static const char *wc_status_str(int status) {
     }
 }
 
-/* Debugging poll: wait for 'want' completions; prints details for each */
 static int debug_poll_cq(struct ibv_cq *cq, int want) {
     int got = 0;
     while (got < want) {
@@ -385,160 +219,247 @@ static int debug_poll_cq(struct ibv_cq *cq, int want) {
         if (ne == 0) continue;
         got += 1;
         if (wc.status != IBV_WC_SUCCESS) {
-            fprintf(stderr, "WC ERROR: status=%d (%s), opcode=%d, wr_id=%" PRIu64 ", vendor_err=%u, qp_num=%u\n",
-                    wc.status, wc_status_str(wc.status), wc.opcode, (unsigned long long)wc.wr_id, wc.vendor_err, wc.qp_num);
+            fprintf(stderr, "WC ERROR: status=%d (%s), opcode=%d, wr_id=0x%" PRIx64 ", vendor_err=%u, qp_num=%u\n",
+                    wc.status, wc_status_str(wc.status), wc.opcode, (uint64_t)wc.wr_id, wc.vendor_err, wc.qp_num);
             return -1;
-        } else {
-            /* success: still useful to print on verbose runs */
-            //fprintf(stderr, "WC OK: opcode=%d wr_id=%" PRIu64 " qp_num=%u\n", wc.opcode, (unsigned long long)wc.wr_id, wc.qp_num);
         }
     }
     return 0;
 }
 
-/* poll cq until at least 'want' completions found or error (simple) */
-static int poll_cq(struct ibv_cq *cq, int want) {
-    int got = 0;
-    while (got < want) {
-        struct ibv_wc wc;
-        int ne = ibv_poll_cq(cq, 1, &wc);
-        if (ne < 0) return -1;
-        if (ne == 0) continue;
-        if (wc.status != IBV_WC_SUCCESS) {
-            fprintf(stderr, "wc error status %d\n", wc.status);
-            return -1;
-        }
-        got += 1;
+/* posting helpers */
+static int post_recv(pg_conn_t *pg, int peer, void *buf, size_t len) {
+    struct ibv_sge sge;
+    struct ibv_recv_wr rr, *bad;
+    memset(&sge, 0, sizeof(sge));
+    sge.addr = (uintptr_t)buf;
+    sge.length = len;
+    sge.lkey = pg->mr_recv->lkey;
+    memset(&rr, 0, sizeof(rr));
+    rr.wr_id = WRID_RECV(peer);
+    rr.next = NULL;
+    rr.sg_list = &sge;
+    rr.num_sge = 1;
+    int rc = ibv_post_recv(pg->qps[peer], &rr, &bad);
+    if (rc) {
+        fprintf(stderr, "ibv_post_recv(peer=%d) failed: %d\n", peer, rc);
     }
-    return 0;
+    return rc;
 }
 
-/* reduce two int32 arrays in-place: dst[i] += src[i] */
+static int post_send(pg_conn_t *pg, int peer, void *buf, size_t len) {
+    struct ibv_sge sge;
+    struct ibv_send_wr wr, *bad;
+    memset(&sge, 0, sizeof(sge));
+    sge.addr = (uintptr_t)buf;
+    sge.length = len;
+    sge.lkey = pg->mr_send->lkey;
+    memset(&wr, 0, sizeof(wr));
+    wr.wr_id = WRID_SEND(peer);
+    wr.next = NULL;
+    wr.sg_list = &sge;
+    wr.num_sge = 1;
+    wr.opcode = IBV_WR_SEND;
+    wr.send_flags = IBV_SEND_SIGNALED;
+    int rc = ibv_post_send(pg->qps[peer], &wr, &bad);
+    if (rc) {
+        fprintf(stderr, "ibv_post_send(peer=%d) failed: %d\n", peer, rc);
+    }
+    return rc;
+}
+
+/* simple int32 reduction */
 static void reduce_int32_inplace(int32_t *dst, int32_t *src, int count) {
     for (int i = 0; i < count; ++i) dst[i] += src[i];
 }
 
-/* Implement ring all-reduce for int32 */
+/* connect */
+int connect_process_group(const char *host_list, int myrank, void **pg_handle_out) {
+    int i, ret = -1;
+    int nproc;
+    char **hosts = parse_host_list(host_list, &nproc);
+    if (nproc < 2) { fprintf(stderr, "need >=2 hosts\n"); return -1; }
+    if (myrank < 0 || myrank >= nproc) { fprintf(stderr, "invalid rank\n"); return -1; }
+
+    pg_conn_t *pg = calloc(1, sizeof(*pg));
+    pg->nprocs = nproc;
+    pg->myrank = myrank;
+    pg->hosts = hosts;
+
+    struct ibv_device **dev_list = ibv_get_device_list(NULL);
+    if (!dev_list) { perror("ibv_get_device_list"); goto out; }
+    pg->ctx = ibv_open_device(dev_list[0]);
+    ibv_free_device_list(dev_list);
+    if (!pg->ctx) { perror("ibv_open_device"); goto out; }
+    pg->pd = ibv_alloc_pd(pg->ctx);
+    if (!pg->pd) { perror("ibv_alloc_pd"); goto out; }
+    pg->cq = ibv_create_cq(pg->ctx, 512, NULL, NULL, 0);
+    if (!pg->cq) { perror("ibv_create_cq"); goto out; }
+
+    pg->qps = calloc(nproc, sizeof(struct ibv_qp*));
+    for (i = 0; i < nproc; ++i) {
+        pg->qps[i] = create_qp(pg->pd, pg->cq);
+        if (!pg->qps[i]) { fprintf(stderr, "create_qp failed for %d\n", i); goto out; }
+        if (modify_qp_to_init(pg->qps[i]) != 0) { fprintf(stderr, "modify to INIT failed for qp %d\n", i); goto out; }
+    }
+
+    /* allocate buffers */
+    size_t default_count = 4096; /* elements */
+    pg->buf_bytes = default_count * sizeof(int32_t);
+    void *p1 = NULL, *p2 = NULL;
+    if (posix_memalign(&p1, 4096, pg->buf_bytes) != 0) p1 = NULL;
+    if (posix_memalign(&p2, 4096, pg->buf_bytes) != 0) p2 = NULL;
+    if (!p1 || !p2) { fprintf(stderr, "posix_memalign failed\n"); goto out; }
+    pg->send_buf = p1; pg->recv_buf = p2;
+    memset(pg->send_buf, 0, pg->buf_bytes);
+    memset(pg->recv_buf, 0, pg->buf_bytes);
+    pg->mr_send = ibv_reg_mr(pg->pd, pg->send_buf, pg->buf_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
+    pg->mr_recv = ibv_reg_mr(pg->pd, pg->recv_buf, pg->buf_bytes, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
+    if (!pg->mr_send || !pg->mr_recv) { fprintf(stderr, "reg_mr failed\n"); goto out; }
+
+    /* local info */
+    peer_info_t local;
+    memset(&local, 0, sizeof(local));
+    struct ibv_port_attr port_attr;
+    if (ibv_query_port(pg->ctx, 1, &port_attr)) { perror("ibv_query_port"); goto out; }
+    local.lid = port_attr.lid;
+    local.qpn = pg->qps[pg->myrank]->qp_num;
+    local.psn = 0;
+    local.vaddr = (uintptr_t)pg->mr_send->addr;
+    local.rkey = pg->mr_send->rkey;
+
+    int listen_sock = tcp_listen(PG_PORT_BASE + pg->myrank);
+    if (listen_sock < 0) { perror("tcp_listen"); goto out; }
+    pg->sock_listen = listen_sock;
+
+    pg->remote_info = calloc(nproc, sizeof(peer_info_t));
+
+    for (i = 0; i < nproc; ++i) {
+        if (i == pg->myrank) {
+            pg->remote_info[i] = local;
+            continue;
+        }
+        if (pg->myrank < i) {
+            int s = -1; int tries = 0;
+            while ((s = tcp_connect_to_host(hosts[i], PG_PORT_BASE + i)) < 0 && tries < 60) { tries++; sleep(1); }
+            if (s < 0) { fprintf(stderr, "connect to %s failed\n", hosts[i]); goto out; }
+            if (send_all(s, &local, sizeof(local)) != 0) { close(s); goto out; }
+            if (recv_all(s, &pg->remote_info[i], sizeof(peer_info_t)) != 0) { close(s); goto out; }
+            close(s);
+        } else {
+            int c = accept(listen_sock, NULL, NULL);
+            if (c < 0) { perror("accept"); goto out; }
+            if (recv_all(c, &pg->remote_info[i], sizeof(peer_info_t)) != 0) { close(c); goto out; }
+            if (send_all(c, &local, sizeof(local)) != 0) { close(c); goto out; }
+            close(c);
+        }
+    }
+
+    /* Transition QPs to RTR/RTS and show info */
+    for (i = 0; i < nproc; ++i) {
+        if (i == pg->myrank) continue;
+        fprintf(stderr, "peer %d: local_qp=%u remote_qpn=%u remote_lid=%u\n",
+                i, pg->qps[i]->qp_num, pg->remote_info[i].qpn, pg->remote_info[i].lid);
+        if (modify_qp_to_rtr(pg->qps[i], pg->remote_info[i].qpn, pg->remote_info[i].lid, pg->remote_info[i].gid.gid) != 0) {
+            fprintf(stderr, "modify to RTR failed for peer %d\n", i); goto out;
+        }
+        if (modify_qp_to_rts(pg->qps[i]) != 0) {
+            fprintf(stderr, "modify to RTS failed for peer %d\n", i); goto out;
+        }
+    }
+
+    *pg_handle_out = pg;
+    ret = 0;
+out:
+    if (ret != 0) {
+        if (pg) {
+            if (pg->cq) ibv_destroy_cq(pg->cq);
+            if (pg->pd) ibv_dealloc_pd(pg->pd);
+            if (pg->ctx) ibv_close_device(pg->ctx);
+            free(pg);
+        }
+    }
+    return ret;
+}
+
+/* all-reduce (int32 only for simplicity). Conservative, debug-friendly. */
 int pg_all_reduce(void *sendbuf_v, void *recvbuf_v, int count, int datatype_bytes, int myrank, void *pg_handle) {
     if (datatype_bytes != 4) {
-        fprintf(stderr, "only 4-byte int32 supported in this implementation\n");
+        fprintf(stderr, "only 4-byte int32 supported\n");
         return -1;
     }
     pg_conn_t *pg = (pg_conn_t*)pg_handle;
     if (!pg) return -1;
     int n = pg->nprocs;
     int rank = myrank;
-    int chunk_elems = (count + n - 1) / n; /* ceil */
-    int total_chunks = n;
-    int elem_per_chunk = chunk_elems;
-    size_t chunk_bytes = elem_per_chunk * datatype_bytes;
-    /* ensure our registered buffers are big enough */
-    if ((size_t)count * datatype_bytes > pg->buf_bytes) {
-        fprintf(stderr, "buffer too small in pg (increase default_count)\n");
+    int elems_per_chunk = (count + n - 1) / n;
+    size_t chunk_bytes = elems_per_chunk * datatype_bytes;
+
+    struct ibv_port_attr port_attr;
+    if (ibv_query_port(pg->ctx, 1, &port_attr) == 0) {
+        fprintf(stderr, "port active_mtu=%d\n", port_attr.active_mtu);
+    }
+
+    if (chunk_bytes > pg->buf_bytes) {
+        fprintf(stderr, "chunk_bytes (%zu) > buffer (%zu). Increase buffer size\n", chunk_bytes, pg->buf_bytes);
         return -1;
     }
-    /* copy sendbuf into local recvbuf as initial content */
+
+    /* copy input into local send_buf */
     memcpy(pg->send_buf, sendbuf_v, count * datatype_bytes);
     memset(pg->recv_buf, 0, pg->buf_bytes);
 
-    /* We'll do reduce-scatter followed by allgather */
-    /* Reduce-scatter phase:
-       For step s = 0..n-2:
-         send chunk (rank - s + n) % n  to next (rank+1)%n
-         recv chunk (rank - s -1 + n) % n  from prev (rank-1+n)%n
-         after receive, reduce into local chunk position
-    */
     int next = (rank + 1) % n;
     int prev = (rank - 1 + n) % n;
 
-    /* We'll use the registered send buffer to send and recv buffer to receive.
-       For simplicity, we will move per-chunk data into send buffer offsets.
-    */
-
-    /* Pre-post one recv for each step to avoid deadlocks */
+    /* Pre-post (n-1) recvs in rotating slots to avoid deadlock */
     for (int s = 0; s < n-1; ++s) {
-        /* place recv into a temp area in recv_buf at offset s*chunk_bytes (safe) */
         void *recv_ptr = (char*)pg->recv_buf + (s % (n-1)) * chunk_bytes;
         if (post_recv(pg, prev, recv_ptr, chunk_bytes) != 0) {
-            fprintf(stderr, "post_recv failed\n");
+            fprintf(stderr, "post_recv failed pre-post\n");
             return -1;
         }
     }
 
-    /* Initialize local chunks: copy local data chunk-wise into local 'accumulator' slots.
-       We'll keep the chunk for my chunk index in place at offset (rank * chunk_bytes) of recv_buf_acc.
-    */
-    /* For simplicity, start with local buffer in recv_buf at chunk index 'rank' */
-    int32_t *acc_base = (int32_t*)((char*)pg->recv_buf + rank * chunk_bytes);
-    int copy_elems = (count - rank*elem_per_chunk);
-    if (copy_elems > elem_per_chunk) copy_elems = elem_per_chunk;
-    if (copy_elems < 0) copy_elems = 0;
-    memset(acc_base, 0, elem_per_chunk * sizeof(int32_t));
-    if (copy_elems > 0) {
-        memcpy(acc_base, (char*)pg->send_buf + rank*elem_per_chunk*datatype_bytes, copy_elems*datatype_bytes);
-    }
+    /* Initialize accumulator for own chunk (placed at recv_buf offset rank*chunk_bytes) */
+    int32_t *acc = (int32_t*)((char*)pg->recv_buf + rank * chunk_bytes);
+    int this_chunk_elems = count - rank * elems_per_chunk;
+    if (this_chunk_elems > elems_per_chunk) this_chunk_elems = elems_per_chunk;
+    if (this_chunk_elems < 0) this_chunk_elems = 0;
+    memset(acc, 0, elems_per_chunk * sizeof(int32_t));
+    if (this_chunk_elems > 0) memcpy(acc, (char*)pg->send_buf + rank*elems_per_chunk*datatype_bytes, this_chunk_elems*datatype_bytes);
 
-    /* For other chunks we can keep zeros and will reduce into them when we receive */
-
-    /* Now perform n-1 steps */
+    /* Reduce-scatter: n-1 steps */
     for (int s = 0; s < n-1; ++s) {
-        /* prepare the chunk to send: the chunk index we send is (rank - s + n) % n */
         int send_chunk_idx = (rank - s + n) % n;
         void *send_ptr = (char*)pg->send_buf + send_chunk_idx * chunk_bytes;
-        /* ensure send_ptr contains the latest data for that chunk:
-           for step 0 it's the local data we haven't moved; for later steps, it becomes accumulated chunk we hold
-           For simplicity, assume accumulator area is at recv_buf at chunk index 'rank', then rotate memory as needed.
-           To keep code simple and clear (not hyper-optimized), copy current accumulator for send_chunk_idx into send_buf
-           if needed.
-        */
-        /* For correctness, we maintain that after each reduction step, the local process holds the reduced data
-           for chunk index = (rank - s + 1) % n; this is somewhat involved. To keep code understandable, implement
-           the canonical algorithm by sending the chunk currently stored in a known local slot.
-        */
 
-        /* send */
-        if (post_send(pg, next, send_ptr, chunk_bytes, 0) != 0) {
-            fprintf(stderr, "post_send failed\n");
-            return -1;
+        if (post_send(pg, next, send_ptr, chunk_bytes) != 0) {
+            fprintf(stderr, "post_send failed step %d\n", s); return -1;
         }
-        /* wait for send completion */
         if (debug_poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "send completion failed\n"); return -1; }
 
-        /* wait for recv completion (one from prev) and reduce into appropriate local place:
-           ibv_poll_cq returns a wc with wr_id - but we didn't set wr_id. The data is already in the recv buffer region used in post_recv.
-           To find which buffer was filled, we must track where we posted them; we used rotating slots above: (s % (n-1)).
-        */
+        /* wait for recv completion and reduce */
         if (debug_poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "recv completion failed\n"); return -1; }
-        /* The receive for this step was posted into recv_buf offset (s % (n-1))*chunk_bytes */
         void *just_recv = (char*)pg->recv_buf + (s % (n-1)) * chunk_bytes;
-        /* compute destination chunk index to reduce into: dst_idx = (rank - s -1 + n) % n ? canonical algorithm reduces into (rank - s -1) */
         int dst_idx = (rank - s - 1 + n) % n;
         int32_t *dst = (int32_t*)((char*)pg->recv_buf + dst_idx * chunk_bytes);
-        reduce_int32_inplace(dst, (int32_t*)just_recv, elem_per_chunk);
-        /* repost another recv in same slot for next steps if needed (we already pre-posted n-1 recvs above) */
+        reduce_int32_inplace(dst, (int32_t*)just_recv, elems_per_chunk);
+
+        /* repost the recv in the same slot for next steps if needed (we posted n-1 initially, so it's fine) */
     }
 
-    /* After reduce-scatter, each process holds one chunk of the final reduced vector: chunk index = (rank - (n-1) + n) % n? but canonical result: each rank holds chunk indexed by rank */
-    /* For our simple approach we'll assume that the reduced chunk for 'rank' is stored in recv_buf at index 'rank' (we arranged earlier) */
-
-    /* Allgather phase: ring to exchange pieces so everyone gets full vector.
-       For step s = 0..n-2:
-         send the chunk we currently have for index (rank - s + n) % n to next
-         recv a chunk from prev and place it in appropriate slot.
-    */
-    /* For simplicity, reuse same post_recv/post_send approach */
+    /* Allgather: n-1 steps */
     for (int s = 0; s < n-1; ++s) {
         int send_idx = (rank - s + n) % n;
         void *send_ptr = (char*)pg->recv_buf + send_idx * chunk_bytes;
-        /* post recv first to avoid deadlock */
         void *recv_ptr = (char*)pg->recv_buf + ((rank - s - 1 + n) % n) * chunk_bytes;
         if (post_recv(pg, prev, recv_ptr, chunk_bytes) != 0) { fprintf(stderr, "post_recv allgather failed\n"); return -1; }
-        if (post_send(pg, next, send_ptr, chunk_bytes, 0) != 0) { fprintf(stderr, "post_send allgather failed\n"); return -1; }
+        if (post_send(pg, next, send_ptr, chunk_bytes) != 0) { fprintf(stderr, "post_send allgather failed\n"); return -1; }
         if (debug_poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "send completion allgather failed\n"); return -1; }
         if (debug_poll_cq(pg->cq, 1) != 0) { fprintf(stderr, "recv completion allgather failed\n"); return -1; }
     }
 
-    /* copy final gathered vector from recv_buf into recvbuf_v (only first 'count' elements) */
     memcpy(recvbuf_v, pg->recv_buf, count * datatype_bytes);
     return 0;
 }
@@ -564,7 +485,7 @@ int pg_close(void *pg_handle) {
         free(pg->hosts);
     }
     if (pg->remote_info) free(pg->remote_info);
-    close(pg->sock_listen);
+    if (pg->sock_listen) close(pg->sock_listen);
     free(pg);
     return 0;
 }
