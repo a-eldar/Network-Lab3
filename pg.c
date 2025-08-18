@@ -287,7 +287,7 @@ int connect_process_group(const char *host_list, int myrank, void **pg_handle_ou
     /* Move QPs to RTR/RTS using remote qpn and lid */
     for (i = 0; i < nproc; ++i) {
         if (i == pg->myrank) continue;
-        if (modify_qp_to_rtr(pg->qps[i], pg->remote_info[i].qpn, pg->remote_info[i].lid, pg->remote_info[i].gid) != 0) {
+        if (modify_qp_to_rtr(pg->qps[i], pg->remote_info[i].qpn, pg->remote_info[i].lid, pg->remote_info[i].gid.gid) != 0) {
             fprintf(stderr, "modify to rtr failed for peer %d\n", i); goto out;
         }
         if (modify_qp_to_rts(pg->qps[i]) != 0) {
