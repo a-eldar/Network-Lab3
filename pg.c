@@ -293,7 +293,7 @@ int connect_process_group(const char *host_list, int myrank, void **pg_handle_ou
         if (modify_qp_to_rts(pg->qps[i]) != 0) {
             fprintf(stderr, "modify to rts failed for peer %d\n", i); goto out;
         }
-    }
+    } 
 
     *pg_handle_out = pg;
     ret = 0;
