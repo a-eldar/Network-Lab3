@@ -260,7 +260,12 @@ static int exchange_info(int lsock, int csock, struct ibv_qp* my_qp, PGHandle* h
 }
 
 int pg_connect_ring(char** serverlist, int len, int idx, PGHandle* h) {
-	if (!serverlist || len <= 1 || idx < 0 || idx >= len || !h) return -1;
+	if (!serverlist || len <= 1 || idx < 0 || idx > len || !h){
+		if (DEBUG) fprintf(stderr, "[R%d] Invalid parameters for pg_connect_ring\n", idx);
+		// print the specific parameters
+		fprintf(stderr, "[R%d] serverlist=%p len=%d idx=%d h=%p\n", idx, (void*)serverlist, len, idx, (void*)h);
+		return -1;
+	}
 	memset(h, 0, sizeof(*h));
 	h->world_size = len;
 	h->my_rank = idx;
