@@ -19,44 +19,50 @@ typedef enum {
     MULT
 } OPERATION;
 
-struct pingpong_context {
-    struct ibv_context		*context;
-    struct ibv_comp_channel	*channel;
-    struct ibv_pd		*pd;
-    struct ibv_mr		*mr;
-    struct ibv_cq		*cq;
-    struct ibv_qp		*qp;
-    void			*buf;
-    int				size;
-    int				rx_depth;
-    int				routs;
-    struct ibv_port_attr	portinfo;
-};
+typedef struct {
+    uint16_t lid;
+    uint32_t qpn;
+    uint32_t psn;
+} qp_info_t;
 
-struct pingpong_dest {
-    int lid;
-    int qpn;
-    int psn;
-    union ibv_gid gid;
-};
+/* Memory region info exchanged with neighbors (rkey + address) */
+typedef struct {
+    uint32_t rkey;
+    uintptr_t addr;
+} mr_info_t;
 
-// Main handle structure for process group
-typedef struct PGHandle {
-    // Server information
-    int num_servers;
-    int server_idx;
-    char **server_list;
-    
-    // RDMA connections
-    // left_conn: Buffer for writing data that left neighbor will read from us
-    // right_conn: Connection for reading data from left neighbor
-    struct pingpong_context *left_conn;
-    struct pingpong_context *right_conn;
-    
-    // Synchronization
-    int connected;
-    
-} PGHandle;
+typedef struct pg_handle {
+    /* process group identity */
+    int rank;          /* local rank in the provided server list */
+    int size;          /* total number of ranks */
+
+    /* server names parsed from the server list (array of size 'size') */
+    char **servernames; /* owned by handle; freed during pg_close */
+
+    /* RDMA device / protection domain / CQs / QPs */
+    struct ibv_context *ctx;
+    struct ibv_pd *pd;
+    struct ibv_cq *cq;
+    struct ibv_qp **qps; /* array of 2 QPs: [0] = left, [1] = right */
+
+    /* Memory regions and buffers */
+    void *sendbuf;        /* local send buffer (registered) */
+    void *recvbuf;        /* local recv buffer (registered) */
+    struct ibv_mr *mr_send;
+    struct ibv_mr *mr_recv;
+
+    /* local memory info (for sharing if necessary) */
+    uint32_t local_rkey;
+    uintptr_t local_addr;
+    size_t bufsize;       /* size of send/recv buffers */
+
+    /* remote neighbors' info mapped by rank index */
+    uint32_t *remote_rkeys;   /* array size 'size' */
+    uintptr_t *remote_addrs;  /* array size 'size' */
+
+    /* optional extras that might be useful to keep */
+    /* page size or other config values could be added here */
+} pg_handle_t;
 
 
 

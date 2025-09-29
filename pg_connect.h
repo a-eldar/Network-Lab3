@@ -20,8 +20,7 @@ extern "C" {
  * to call connect_process_group() and the other public APIs.
  */
 
-#include <infiniband/verbs.h>
-#include <stdint.h>
+#include "pg_handle.h"
 #include <stddef.h>
 
 /* Default base ports used for QP and MR exchanges over TCP.
@@ -39,73 +38,6 @@ extern "C" {
 
 /* Maximum server name length used in code */
 #define PG_MAX_HOSTNAME_LEN 256
-
-/* Small structure describing a QP's public parameters (LID, QPN, PSN).
- * This is sent/received during QP info exchange over TCP.
- */
-typedef struct {
-    uint16_t lid;
-    uint32_t qpn;
-    uint32_t psn;
-} qp_info_t;
-
-/* Memory region info exchanged with neighbors (rkey + address) */
-typedef struct {
-    uint32_t rkey;
-    uintptr_t addr;
-} mr_info_t;
-
-/* Supported datatypes for PG collectives (expand as needed) */
-typedef enum {
-    INT,
-    DOUBLE
-} DATATYPE;
-
-/* Supported reduction operations */
-typedef enum {
-    SUM,
-    MULT
-} OPERATION;
-
-/*
- * Process-group handle: holds all verbs objects and bookkeeping fields.
- *
- * Fields are intentionally similar to the source file you posted. Callers
- * should treat this as an opaque handle for most operations — but the fields
- * are exposed for debugging/inspection.
- */
-typedef struct pg_handle {
-    /* process group identity */
-    int rank;          /* local rank in the provided server list */
-    int size;          /* total number of ranks */
-
-    /* server names parsed from the server list (array of size 'size') */
-    char **servernames; /* owned by handle; freed during pg_close */
-
-    /* RDMA device / protection domain / CQs / QPs */
-    struct ibv_context *ctx;
-    struct ibv_pd *pd;
-    struct ibv_cq *cq;
-    struct ibv_qp **qps; /* array of 2 QPs: [0] = left, [1] = right */
-
-    /* Memory regions and buffers */
-    void *sendbuf;        /* local send buffer (registered) */
-    void *recvbuf;        /* local recv buffer (registered) */
-    struct ibv_mr *mr_send;
-    struct ibv_mr *mr_recv;
-
-    /* local memory info (for sharing if necessary) */
-    uint32_t local_rkey;
-    uintptr_t local_addr;
-    size_t bufsize;       /* size of send/recv buffers */
-
-    /* remote neighbors' info mapped by rank index */
-    uint32_t *remote_rkeys;   /* array size 'size' */
-    uintptr_t *remote_addrs;  /* array size 'size' */
-
-    /* optional extras that might be useful to keep */
-    /* page size or other config values could be added here */
-} pg_handle_t;
 
 /* Public API
  *
