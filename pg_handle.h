@@ -46,7 +46,7 @@ typedef struct addrinfo{
     struct in_addr sin_addr;
 }
 
-typedef struct pg_handle_t {
+typedef struct{
     /* process group identity */
     int rank;          /* local rank in the provided server list */
     int size;          /* total number of ranks */
