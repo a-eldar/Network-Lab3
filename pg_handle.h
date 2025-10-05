@@ -8,6 +8,8 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include <netdb.h>
+
 
 #define MAX_WR_ID 1000
 #define RDMA_BUFFER_SIZE (1024 * 1024 * 16)  // 16MB buffer for RDMA operations
@@ -34,17 +36,7 @@ typedef struct {
     uintptr_t addr;
 } mr_info_t;
 
-typedef struct addrinfo{
-    int ai_flags;              /* Input flags.  */
-    int ai_family;             /* Protocol family for socket.  */
-    int ai_socktype;           /* Socket type.  */
-    int ai_protocol;           /* Protocol for socket.  */
-    size_t ai_addrlen;         /* Length of socket address.  */
-    struct sockaddr *ai_addr;  /* Socket address for socket.  */
-    char *ai_canonname;        /* Canonical name for service location.  */
-    struct addrinfo *ai_next;  /* Pointer to next in list.  */
-    struct in_addr sin_addr;
-} addrinfo;
+
 
 typedef struct{
     /* process group identity */
