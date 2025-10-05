@@ -44,7 +44,7 @@ typedef struct addrinfo{
     char *ai_canonname;        /* Canonical name for service location.  */
     struct addrinfo *ai_next;  /* Pointer to next in list.  */
     struct in_addr sin_addr;
-}
+} addrinfo;
 
 typedef struct{
     /* process group identity */
