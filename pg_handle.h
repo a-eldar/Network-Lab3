@@ -9,6 +9,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <stdlib.h>
 
 
 #define MAX_WR_ID 1000
