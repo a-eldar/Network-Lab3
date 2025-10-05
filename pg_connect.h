@@ -74,14 +74,6 @@ int pg_all_reduce(void *sendbuf, void *recvbuf, int count,
  */
 int pg_close(void *pg_handle);
 
-
-/* Extern declarations for small TCP helper functions that the implementation
- * used. If these are implemented elsewhere, keep the declarations; otherwise,
- * remove or change them to match your TCP helper API.
- */
-extern int tcp_connect(const char *host, int port);
-extern int tcp_listen_accept(int port);
-
 #ifdef __cplusplus
 }
 #endif
