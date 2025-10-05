@@ -33,7 +33,7 @@ static int tcp_connect(const char *hostname, int port) {
         return -1;
     }
 
-    struct sockaddr_in addr = (struct sockaddr_in)res->ai_addr;
+    struct sockaddr_in* addr = (struct sockaddr_in*)res->ai_addr;
     char ip_str[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &(addr->sin_addr), ip_str, INET_ADDRSTRLEN);
 
