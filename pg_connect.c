@@ -5,21 +5,21 @@ static int page_size;
 
 ////////////////////////// Helpers //////////////////////////
 // Helper: Resolve hostname to IP address
-// static char* get_ip_from_hostname(const char *hostname) {
-//     struct addrinfo hints = {0}, *res;
-//     hints.ai_family = AF_INET;  // IPv4 only
-//     hints.ai_socktype = SOCK_STREAM;
+static char* get_ip_from_hostname(const char *hostname) {
+    struct addrinfo hints = {0}, *res;
+    hints.ai_family = AF_INET;  // IPv4 only
+    hints.ai_socktype = SOCK_STREAM;
 
-//     if (getaddrinfo(hostname, NULL, &hints, &res) != 0) {
-//         printf("[DEBUG] Failed to resolve hostname: %s\n", hostname);
-//         return NULL;  // Failed to resolve
-//     }
+    if (getaddrinfo(hostname, NULL, &hints, &res) != 0) {
+        printf("[DEBUG] Failed to resolve hostname: %s\n", hostname);
+        return NULL;  // Failed to resolve
+    }
 
-//     struct sockaddr_in addr = (struct sockaddr_in)res->ai_addr;
-//     char *ip = strdup(inet_ntoa(addr->sin_addr));
-//     freeaddrinfo(res);
-//     return ip;
-// }
+    struct sockaddr_in* addr = (struct sockaddr_in*)res->ai_addr;
+    char *ip = strdup(inet_ntoa(addr->sin_addr));
+    freeaddrinfo(res);
+    return ip;
+}
 
 // Connect to a hostname:port, return socket fd
 static int tcp_connect(const char *hostname, int port) {
