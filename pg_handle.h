@@ -5,6 +5,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
 #define MAX_WR_ID 1000
 #define RDMA_BUFFER_SIZE (1024 * 1024 * 16)  // 16MB buffer for RDMA operations
