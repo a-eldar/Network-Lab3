@@ -3,6 +3,94 @@
 static int page_size;
 
 
+////////////////////////// Helpers //////////////////////////
+// Helper: Resolve hostname to IP address
+static char* get_ip_from_hostname(const char *hostname) {
+    struct addrinfo hints = {0}, *res;
+    hints.ai_family = AF_INET;  // IPv4 only
+    hints.ai_socktype = SOCK_STREAM;
+
+    if (getaddrinfo(hostname, NULL, &hints, &res) != 0) {
+        printf("[DEBUG] Failed to resolve hostname: %s\n", hostname);
+        return NULL;  // Failed to resolve
+    }
+
+    struct sockaddr_in addr = (struct sockaddr_in)res->ai_addr;
+    char *ip = strdup(inet_ntoa(addr->sin_addr));
+    freeaddrinfo(res);
+    return ip;
+}
+
+// Connect to a hostname:port, return socket fd
+static int tcp_connect(const char *hostname, int port) {
+    // Resolve hostname to IP
+    struct addrinfo hints = {0}, *res;
+    hints.ai_family = AF_INET;  // IPv4 only
+    hints.ai_socktype = SOCK_STREAM;
+
+    if (getaddrinfo(hostname, NULL, &hints, &res) != 0) {
+        printf("[DEBUG] Failed to resolve hostname: %s\n", hostname);
+        return -1;
+    }
+
+    struct sockaddr_in addr = (struct sockaddr_in)res->ai_addr;
+    char ip_str[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &(addr->sin_addr), ip_str, INET_ADDRSTRLEN);
+
+    // Now connect using the IP
+    char portstr[16];
+    snprintf(portstr, sizeof(portstr), "%d", port);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    struct addrinfo *res_connect;
+    if (getaddrinfo(ip_str, portstr, &hints, &res_connect) != 0) {
+        printf("[ERROR] Failed to getaddrinfo for IP: %s\n", ip_str);
+        freeaddrinfo(res);
+        return -1;
+    }
+
+    int sock = -1;
+    for (struct addrinfo *rp = res_connect; rp; rp = rp->ai_next) {
+        for (int attempt = 0; attempt < 10; ++attempt) { // Try 10 times
+            sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+            if (sock == -1) continue;
+            if (connect(sock, rp->ai_addr, rp->ai_addrlen) == 0) {
+                freeaddrinfo(res_connect);
+                freeaddrinfo(res);
+                return sock;
+            }
+            close(sock); sock = -1;
+            usleep(2000000); // Wait 2s before retry
+        }
+    }
+
+    printf("[ERROR] Failed to connect to %s:%d after 10 attempts\n", ip_str, port);
+    freeaddrinfo(res_connect);
+    freeaddrinfo(res);
+    return -1;
+}
+
+// Listen on a port, return accepted socket fd
+static int tcp_listen_accept(int port) {
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(port);
+    bind(sock, (struct sockaddr *)&addr, sizeof(addr));
+    listen(sock, 1);
+    int client = accept(sock, NULL, NULL);
+    close(sock);
+    return client;
+}
+
+
+
+
+
+
+/////////////////////////// Main Functions //////////////////////////
 
 // Helper: Parse comma-separated server list into array
 // We expect the server list to be a comma-separated list of hostnames or IP addresses
