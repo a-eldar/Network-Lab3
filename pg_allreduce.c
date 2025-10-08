@@ -50,60 +50,60 @@ static void perform_operation(void *dst, const void *src, int count, DATATYPE da
     }
 }
 
-static int synchronize_servers(PGHandle *pg_handle) {
-    // Simple barrier synchronization
-    int sync_val = 1;
-    size_t sync_offset = pg_handle->work_buffer_size - sizeof(int);
+// static int synchronize_servers(PGHandle *pg_handle) {
+//     // Simple barrier synchronization
+//     int sync_val = 1;
+//     size_t sync_offset = pg_handle->work_buffer_size - sizeof(int);
     
-    // Write sync value locally
-    memcpy((char *)pg_handle->left_conn->buf + sync_offset, &sync_val, sizeof(int));
+//     // Write sync value locally
+//     memcpy((char *)pg_handle->left_conn->buf + sync_offset, &sync_val, sizeof(int));
     
-    // Wait for left neighbor to set their sync flag by reading from them
-    int received_sync = 0;
-    int attempts = 0;
-    void *local_sync_buf = malloc(sizeof(int));
+//     // Wait for left neighbor to set their sync flag by reading from them
+//     int received_sync = 0;
+//     int attempts = 0;
+//     void *local_sync_buf = malloc(sizeof(int));
     
-    while (received_sync == 0 && attempts < 1000) {
-        // Read sync flag from left neighbor's buffer
-        if (post_rdma_read(pg_handle->right_conn,
-                          local_sync_buf,
-                          sizeof(int),
-                          pg_handle->left_conn->remote_addr + sync_offset,
-                          pg_handle->left_conn->remote_rkey) < 0) {
-            free(local_sync_buf);
-            return -1;
-        }
+//     while (received_sync == 0 && attempts < 1000) {
+//         // Read sync flag from left neighbor's buffer
+//         if (post_rdma_read(pg_handle->right_conn,
+//                           local_sync_buf,
+//                           sizeof(int),
+//                           pg_handle->left_conn->remote_addr + sync_offset,
+//                           pg_handle->left_conn->remote_rkey) < 0) {
+//             free(local_sync_buf);
+//             return -1;
+//         }
         
-        if (wait_for_completion(pg_handle->right_conn) < 0) {
-            free(local_sync_buf);
-            return -1;
-        }
+//         if (wait_for_completion(pg_handle->right_conn) < 0) {
+//             free(local_sync_buf);
+//             return -1;
+//         }
         
-        memcpy(&received_sync, local_sync_buf, sizeof(int));
-        if (received_sync == 0) {
-            usleep(1000); // Wait 1ms
-        }
-        attempts++;
-    }
+//         memcpy(&received_sync, local_sync_buf, sizeof(int));
+//         if (received_sync == 0) {
+//             usleep(1000); // Wait 1ms
+//         }
+//         attempts++;
+//     }
     
-    // Clear sync flag for next use
-    sync_val = 0;
-    memcpy((char *)pg_handle->left_conn->buf + sync_offset, &sync_val, sizeof(int));
+//     // Clear sync flag for next use
+//     sync_val = 0;
+//     memcpy((char *)pg_handle->left_conn->buf + sync_offset, &sync_val, sizeof(int));
     
-    free(local_sync_buf);
-    return 0;
-}
+//     free(local_sync_buf);
+//     return 0;
+// }
 
 // Rendezvous method: Local write + remote read
 static int transfer_data_rendezvous(PGHandle *pg_handle) {
     
     if(rdma_write_to_right(pg_handle)){
-        fprintf(stderr, "Rank %d: rdma_write_to_right failed\n", rank);
+        fprintf(stderr, "Rank %d: rdma_write_to_right failed\n", pg_handle->rank);
         return 1;
     }
     // Wait for completion
     if(poll_for_completion(pg_handle) != 0) {
-        fprintf(stderr, "Rank %d: poll_for_completion failed\n", rank);
+        fprintf(stderr, "Rank %d: poll_for_completion failed\n", pg_handle->rank);
         return 1;
     }
 
@@ -118,39 +118,39 @@ static int transfer_data_rendezvous(PGHandle *pg_handle) {
 }
 
 // Eager method: RDMA Write (for easy swapping)
-static int transfer_data_eager(PGHandle *pg_handle, void *send_data, void *recv_data, size_t size) {
-    // Write data to right neighbor's buffer
-    if (post_rdma_write(pg_handle->right_conn,
-                       send_data,
-                       size,
-                       pg_handle->right_conn->remote_addr,
-                       pg_handle->right_conn->remote_rkey) < 0) {
-        return -1;
-    }
+// static int transfer_data_eager(PGHandle *pg_handle, void *send_data, void *recv_data, size_t size) {
+//     // Write data to right neighbor's buffer
+//     if (post_rdma_write(pg_handle->right_conn,
+//                        send_data,
+//                        size,
+//                        pg_handle->right_conn->remote_addr,
+//                        pg_handle->right_conn->remote_rkey) < 0) {
+//         return -1;
+//     }
     
-    if (wait_for_completion(pg_handle->right_conn) < 0) {
-        return -1;
-    }
+//     if (wait_for_completion(pg_handle->right_conn) < 0) {
+//         return -1;
+//     }
     
-    // Synchronize to ensure write is complete
-    if (synchronize_servers(pg_handle) < 0) {
-        return -1;
-    }
+//     // Synchronize to ensure write is complete
+//     if (synchronize_servers(pg_handle) < 0) {
+//         return -1;
+//     }
     
-    // Read from local buffer where left neighbor wrote
-    memcpy(recv_data, pg_handle->left_conn->buf, size);
+//     // Read from local buffer where left neighbor wrote
+//     memcpy(recv_data, pg_handle->left_conn->buf, size);
     
-    return 0;
-}
+//     return 0;
+// }
 
 // Wrapper function to easily switch between methods
-static inline int transfer_data(PGHandle *pg_handle, void *send_data, void *recv_data, size_t size) {
-#if USE_RENDEZVOUS_METHOD
-    return transfer_data_rendezvous(pg_handle, send_data, recv_data, size);
-#else
-    return transfer_data_eager(pg_handle, send_data, recv_data, size);
-#endif
-}
+// static inline int transfer_data(PGHandle *pg_handle, void *send_data, void *recv_data, size_t size) {
+// #if USE_RENDEZVOUS_METHOD
+//     return transfer_data_rendezvous(pg_handle, send_data, recv_data, size);
+// #else
+//     return transfer_data_eager(pg_handle, send_data, recv_data, size);
+// #endif
+// }
 
 int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OPERATION op, PGHandle* pg_handle) {
     if (!sendbuf || !recvbuf || count <= 0 || !pg_handle ) {
