@@ -216,6 +216,16 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
                          datatype,
                          op);
     }
+    // print all reduced result
+    printf("Rank %d: After reduce-scatter, recvbuf = ", pg_handle->rank);
+    for (int i = 0; i < count; i++) {
+        if (datatype == INT) {
+            printf("%d ", ((int *)recvbuf)[i]);
+        } else if (datatype == DOUBLE) {
+            printf("%f ", ((double *)recvbuf)[i]);
+        }
+    }
+    printf("\n");
     
     // Phase 2: All-gather using ring algorithm
     // Each server broadcasts its chunk to all others
