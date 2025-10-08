@@ -177,11 +177,17 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
     
     // Copy input to output buffer initially
     memcpy(recvbuf, sendbuf, total_size);
+    void *temp_buf = malloc(total_size);
+    if (!temp_buf) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return -1;
+    }
     
     // Phase 1: Reduce-scatter using ring algorithm
     // Each server will accumulate values for its designated chunk
     for (int step = 0; step < n - 1; step++) {
         memset(rdma_sendbuf, 0, pg_handle->bufsize);
+        memset(rdma_recvbuf, 0, pg_handle->bufsize);
         // Calculate which chunk to send/receive
         int send_chunk_id = (idx - step + n) % n;
         int recv_chunk_id = (idx - step - 1 + n) % n;
@@ -210,11 +216,11 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         // Transfer data using selected method (rendezvous or eager)
         transfer_data_rendezvous(pg_handle);
 
-        
+        memcpy(temp_buf, rdma_recvbuf, recv_bytes);
         
         // Perform reduction operation
         perform_operation((char *)recvbuf + recv_offset,
-                         rdma_recvbuf,
+                         temp_buf,
                          recv_count,
                          datatype,
                          op);
