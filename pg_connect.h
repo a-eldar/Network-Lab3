@@ -67,13 +67,6 @@ int connect_process_group(char *servername, void **pg_handle, int rank);
 int pg_all_reduce(void *sendbuf, void *recvbuf, int count,
                   DATATYPE datatype, OPERATION op, void *pg_handle);
 
-/*
- * pg_close:
- *   Destroys QPs, deregisters MRs, closes device, frees handle memory.
- *
- * Returns 0 on success, -1 on failure.
- */
-int pg_close(void *pg_handle);
 
 #ifdef __cplusplus
 }
