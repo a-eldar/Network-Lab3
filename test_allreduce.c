@@ -1,6 +1,7 @@
 #include "pg_connect.h"
 #include "rdma_utils.h"
 #include "pg_allreduce.h"
+#include "pg_close.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
