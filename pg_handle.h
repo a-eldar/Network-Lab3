@@ -42,7 +42,7 @@ typedef struct {
 typedef struct{
     /* process group identity */
     int rank;          /* local rank in the provided server list */
-    int size;          /* total number of ranks */
+    int num_servers;          /* total number of ranks */
 
     /* server names parsed from the server list (array of size 'size') */
     char **servernames; /* owned by handle; freed during pg_close */
