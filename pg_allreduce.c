@@ -212,13 +212,25 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         
         // Copy data to send buffer
         memcpy(rdma_sendbuf, (char *)recvbuf + send_offset, send_bytes);
+
+        //DEBUG
+        printf("\n\nRank %d: Sending chunk %d: ", pg_handle->rank, send_chunk_id);
+        for (int i = 0; i < send_count; i++) {
+            if (datatype == INT) {
+                printf("%d ", ((int *)rdma_sendbuf)[i]);
+            } else if (datatype == DOUBLE) {
+                printf("%f ", ((double *)rdma_sendbuf)[i]);
+            }
+        }
+        // ------------------------------------------------
         
         // Transfer data using selected method (rendezvous or eager)
         transfer_data_rendezvous(pg_handle);
 
         // DEBUG
+        
         // print the received chunk
-        printf("Rank %d: After transfer, received chunk %d: ", pg_handle->rank, recv_chunk_id);
+        printf("\n\nRank %d: After transfer, received chunk %d: ", pg_handle->rank, recv_chunk_id);
         for (int i = 0; i < recv_count; i++) {
             if (datatype == INT) {
                 printf("%d ", ((int *)rdma_recvbuf)[i]);
@@ -226,6 +238,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
                 printf("%f ", ((double *)rdma_recvbuf)[i]);
             }
         }
+        // ------------------------------------------------
 
         memcpy(temp_buf, rdma_recvbuf, recv_bytes);
         
@@ -237,7 +250,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
                          op);
     }
     // print all reduced result
-    printf("Rank %d: After reduce-scatter, recvbuf = ", pg_handle->rank);
+    printf("\n\nRank %d: After reduce-scatter, recvbuf = ", pg_handle->rank);
     for (int i = 0; i < count; i++) {
         if (datatype == INT) {
             printf("%d ", ((int *)recvbuf)[i]);
