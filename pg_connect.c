@@ -378,7 +378,7 @@ int connect_process_group(char *servername, void **pg_handle, int rank) {
 
 
     // 4. Allocate and register buffer
-    handle->bufsize = 1024*1024; // was originally 4096
+    handle->bufsize = RDMA_BUFFER_SIZE; // was originally 4096
     handle->sendbuf = malloc(handle->bufsize);
     if (!handle->sendbuf) {
         cleanup_pg_handle(handle);

@@ -40,10 +40,9 @@ int main(int argc, char *argv[]) {
            rank, left_neighbor, right_neighbor);
 
     // Prepare a message in our send buffer
-    char message[256];
-    snprintf(message, sizeof(message), "Hello from rank %d!", rank);
+    snprintf(pg_handle->sendbuf, pg_handle->bufsize, "Hello from rank %d!", rank);
     
-    if(rdma_write_to_right(pg_handle, message, strlen(message) + 1)){
+    if(rdma_write_to_right(pg_handle)){
         fprintf(stderr, "Rank %d: rdma_write_to_right failed\n", rank);
         pg_close(pg_handle_void);
         return 1;
