@@ -225,7 +225,7 @@ static int connect_qp(struct ibv_qp *qp, qp_info_t *local, qp_info_t *remote) {
  * @param pg_handle: pointer to the process group handle
  * @return 0 on success, -1 on failure
  */
-int connect_process_group(char *servername, void **pg_handle) {
+int connect_process_group(char *servername, void **pg_handle, int rank) {
     // Parse server list
     char **names = NULL;
     int size = 0;
@@ -233,42 +233,7 @@ int connect_process_group(char *servername, void **pg_handle) {
         fprintf(stderr, "Failed to parse server list\n");
         return -1;
     }
-    // Get this host's name
-    char myhost[256];
 
-    // gethostname is a system call that gets the hostname of the current process (e.g. "mlxstud01")
-    if (gethostname(myhost, sizeof(myhost)) != 0) {
-        perror("gethostname failed");
-        // Clean up
-        for (int i = 0; i < size; ++i) free(names[i]);
-        free(names);
-        return -1;
-    }
-    myhost[sizeof(myhost)-1] = '\0'; // ensure the string is null-terminated
-
-    // Determine rank - support multiple processes per node using LOCAL_RANK
-    int rank = -1;
-    int local_rank = 0;
-    char *local_rank_env = getenv("LOCAL_RANK");
-    if (local_rank_env) {
-        local_rank = atoi(local_rank_env);
-    }
-    int found = 0;
-    for (int i = 0; i < size; ++i) {
-        if (strcmp(myhost, names[i]) == 0) {
-            if (found == local_rank) {
-                rank = i;
-                break;
-            }
-            found++;
-        }
-    }
-    if (rank == -1) {
-        fprintf(stderr, "Host %s with LOCAL_RANK=%d not found in server list (found %d matches)\n", myhost, local_rank, found);
-        for (int i = 0; i < size; ++i) free(names[i]);
-        free(names);
-        return -1;
-    }
     // Allocate and fill handle - this is a pointer to a struct that will be used to store the RDMA resources for this process
     pg_handle_t *handle = (pg_handle_t *)calloc(1, sizeof(pg_handle_t));
     if (!handle) {

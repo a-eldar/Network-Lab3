@@ -22,18 +22,16 @@
 /**
  * Writes a message to the right neighbor in a ring topology using RDMA Write.
  * @param pg_handle Pointer to the process group handle.
- * @param rank The rank of the current process.
  * @param message The message to send.
  * @param msg_len Length of the message.
  * @return 0 on success, 1 on failure.
  */
-int rdma_write_to_right(pg_handle_t *pg_handle, int rank, char* message, size_t msg_len);  
+int rdma_write_to_right(pg_handle_t *pg_handle, char* message, size_t msg_len);  
 
 /**
  * Polls the completion queue for a work completion.
  * @param pg_handle Pointer to the process group handle.
- * @param rank The rank of the current process.
  * @return 0 on success, 1 on failure.
  */
-int poll_for_completion(pg_handle_t *pg_handle, int rank);
+int poll_for_completion(pg_handle_t *pg_handle);
 #endif // RDMA_UTILS_H
