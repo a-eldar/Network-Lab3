@@ -62,7 +62,7 @@ typedef struct{
     /* local memory info (for sharing if necessary) */
     uint32_t local_rkey;
     uintptr_t local_addr;
-    size_t bufsize;       /* size of send/recv buffers */
+    // size_t bufsize;       /* size of send/recv buffers */
 
     /* remote neighbors' info mapped by rank index */
     uint32_t *remote_rkeys;   /* array size 'size' */

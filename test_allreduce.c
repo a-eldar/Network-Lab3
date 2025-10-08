@@ -1,4 +1,5 @@
 #include "pg_connect.h"
+#include "rdma_utils.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,60 +42,18 @@ int main(int argc, char *argv[]) {
     // Prepare a message in our send buffer
     char message[256];
     snprintf(message, sizeof(message), "Hello from rank %d!", rank);
-    memcpy(pg_handle->sendbuf, message, strlen(message) + 1);
     
-    printf("Rank %d: Prepared message: \"%s\"\n", rank, message);
-
-    // Send message to right neighbor using RDMA Write
-    // We write to the right neighbor's receive buffer
-    struct ibv_sge sge = {
-        .addr = (uintptr_t)pg_handle->sendbuf,
-        .length = strlen(message) + 1,
-        .lkey = pg_handle->mr_send->lkey
-    };
-    
-    struct ibv_send_wr wr = {
-        .wr_id = rank,
-        .sg_list = &sge,
-        .num_sge = 1,
-        .opcode = IBV_WR_RDMA_WRITE,
-        .send_flags = IBV_SEND_SIGNALED,
-        .wr.rdma = {
-            .remote_addr = pg_handle->remote_addrs[right_neighbor],
-            .rkey = pg_handle->remote_rkeys[right_neighbor]
-        },
-        .next = NULL
-    };
-    
-    struct ibv_send_wr *bad_wr;
-    
-    printf("Rank %d: Posting RDMA write to rank %d...\n", rank, right_neighbor);
-    if (ibv_post_send(pg_handle->qps[1], &wr, &bad_wr) != 0) {
-        fprintf(stderr, "Rank %d: Failed to post send\n", rank);
+    if(rdma_write_to_right(pg_handle, rank, message, strlen(message) + 1)){
+        fprintf(stderr, "Rank %d: rdma_write_to_right failed\n", rank);
         pg_close(pg_handle_void);
         return 1;
     }
-    
     // Wait for completion
-    struct ibv_wc wc;
-    int ne;
-    do {
-        ne = ibv_poll_cq(pg_handle->cq, 1, &wc);
-        if (ne < 0) {
-            fprintf(stderr, "Rank %d: Failed to poll CQ\n", rank);
-            pg_close(pg_handle_void);
-            return 1;
-        }
-    } while (ne == 0);
-    
-    if (wc.status != IBV_WC_SUCCESS) {
-        fprintf(stderr, "Rank %d: Work completion failed with status %s\n", 
-                rank, ibv_wc_status_str(wc.status));
+    if(poll_for_completion(pg_handle, rank) != 0) {
+        fprintf(stderr, "Rank %d: poll_for_completion failed\n", rank);
         pg_close(pg_handle_void);
         return 1;
     }
-    
-    printf("Rank %d: RDMA write completed successfully\n", rank);
 
     // Small delay to let neighbors write
     sleep(1);

@@ -21,7 +21,6 @@ static size_t get_datatype_size(DATATYPE datatype) {
 
 static void perform_operation(void *dst, const void *src, int count, DATATYPE datatype, OPERATION op) {
     int i;
-    
     if (datatype == INT) {
         int *d = (int *)dst;
         const int *s = (const int *)src;
