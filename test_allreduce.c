@@ -22,7 +22,7 @@ int main(int argc, char *argv[]) {
     void *pg_handle_void = NULL;
 
     printf("Rank %d: Connecting to process group...\n", rank);
-    if (connect_process_group(serverlist, &pg_handle_void) != 0) {
+    if (connect_process_group(serverlist, &pg_handle_void, rank) != 0) {
         fprintf(stderr, "Rank %d: connect_process_group failed\n", rank);
         return 1;
     }
@@ -43,13 +43,13 @@ int main(int argc, char *argv[]) {
     char message[256];
     snprintf(message, sizeof(message), "Hello from rank %d!", rank);
     
-    if(rdma_write_to_right(pg_handle, rank, message, strlen(message) + 1)){
+    if(rdma_write_to_right(pg_handle, message, strlen(message) + 1)){
         fprintf(stderr, "Rank %d: rdma_write_to_right failed\n", rank);
         pg_close(pg_handle_void);
         return 1;
     }
     // Wait for completion
-    if(poll_for_completion(pg_handle, rank) != 0) {
+    if(poll_for_completion(pg_handle) != 0) {
         fprintf(stderr, "Rank %d: poll_for_completion failed\n", rank);
         pg_close(pg_handle_void);
         return 1;
