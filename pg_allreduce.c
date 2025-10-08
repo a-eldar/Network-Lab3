@@ -216,6 +216,17 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         // Transfer data using selected method (rendezvous or eager)
         transfer_data_rendezvous(pg_handle);
 
+        // DEBUG
+        // print the received chunk
+        printf("Rank %d: After transfer, received chunk %d: ", pg_handle->rank, recv_chunk_id);
+        for (int i = 0; i < recv_count; i++) {
+            if (datatype == INT) {
+                printf("%d ", ((int *)rdma_recvbuf)[i]);
+            } else if (datatype == DOUBLE) {
+                printf("%f ", ((double *)rdma_recvbuf)[i]);
+            }
+        }
+
         memcpy(temp_buf, rdma_recvbuf, recv_bytes);
         
         // Perform reduction operation
