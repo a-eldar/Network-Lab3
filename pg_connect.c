@@ -503,15 +503,3 @@ int connect_process_group(char *servername, void **pg_handle, int rank) {
     }
     return 0;
 }
-
-/**
- * @brief Close the process group and free all resources
- * @param pg_handle: pointer to the process group pg_handle
- * @return 0 on success, -1 on failure
- */
-int pg_close(void *pg_handle) {
-    PGHandle *handle = (PGHandle *)pg_handle;
-    if (!handle) return -1;
-    cleanup_pg_handle(handle);
-    return 0;
-}
