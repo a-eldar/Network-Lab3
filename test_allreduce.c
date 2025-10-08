@@ -102,7 +102,7 @@ int main(int argc, char *argv[]) {
     
     printf("Rank %d: Connected! Size=%d\n", pg_handle->rank, pg_handle->num_servers);
 
-    int size = 21;
+    int size = 20;
     // Prepare a message in our send buffer
     int* sendbuf = malloc(size * sizeof(int));
     for (int i = 0; i < size; i++) {
