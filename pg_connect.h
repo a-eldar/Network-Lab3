@@ -50,23 +50,6 @@ extern "C" {
  */
 int connect_process_group(char *servername, void **pg_handle, int rank);
 
-/*
- * pg_all_reduce:
- *   A collective all-reduce implemented using the RDMA resources in pg_handle.
- *   The exact semantics (pipelining, fragmentation) are implemented in the C file.
- *
- *   sendbuf: pointer to local input buffer (count elements of 'datatype')
- *   recvbuf: pointer to output buffer of length 'count'
- *   count:   number of elements
- *   datatype: DATATYPE describing element size
- *   op: operation to apply
- *   pg_handle: pointer to the handle returned from connect_process_group
- *
- * Returns 0 on success, -1 on failure.
- */
-int pg_all_reduce(void *sendbuf, void *recvbuf, int count,
-                  DATATYPE datatype, OPERATION op, void *pg_handle);
-
 
 #ifdef __cplusplus
 }
