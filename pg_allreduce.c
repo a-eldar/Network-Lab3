@@ -221,8 +221,8 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
     // Each server broadcasts its chunk to all others
     for (int step = 0; step < n - 1; step++) {
         // Calculate which chunk to send/receive
-        int send_chunk_id = (idx - step + n) % n;
-        int recv_chunk_id = (idx - step - 1 + n) % n;
+        int send_chunk_id = (idx - step + n + 1) % n;
+        int recv_chunk_id = (idx - step + n) % n;
         
         // Calculate offsets and sizes
         size_t send_offset = send_chunk_id * chunk_size * dtype_size;
