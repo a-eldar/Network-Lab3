@@ -99,13 +99,11 @@ static int transfer_data_rendezvous(PGHandle *pg_handle) {
     
     if(rdma_write_to_right(pg_handle)){
         fprintf(stderr, "Rank %d: rdma_write_to_right failed\n", rank);
-        pg_close(pg_handle_void);
         return 1;
     }
     // Wait for completion
     if(poll_for_completion(pg_handle) != 0) {
         fprintf(stderr, "Rank %d: poll_for_completion failed\n", rank);
-        pg_close(pg_handle_void);
         return 1;
     }
 
@@ -155,10 +153,13 @@ static inline int transfer_data(PGHandle *pg_handle, void *send_data, void *recv
 }
 
 int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OPERATION op, PGHandle* pg_handle) {
-    if (!sendbuf || !recvbuf || count <= 0 || !pg_handle || !pg_handle->connected) {
+    if (!sendbuf || !recvbuf || count <= 0 || !pg_handle ) {
         fprintf(stderr, "Invalid parameters for all_reduce\n");
         return -1;
     }
+
+    void *rdma_recvbuf = pg_handle->recvbuf;
+    void *rdma_sendbuf = pg_handle->sendbuf;
     
     size_t dtype_size = get_datatype_size(datatype);
     if (dtype_size == 0) {
@@ -168,7 +169,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
     
     size_t total_size = count * dtype_size;
     int n = pg_handle->num_servers;
-    int idx = pg_handle->server_idx;
+    int idx = pg_handle->rank;
     
     // Calculate chunk size for each server
     int chunk_size = count / n;
@@ -176,15 +177,6 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
     
     // Copy input to output buffer initially
     memcpy(recvbuf, sendbuf, total_size);
-    
-    // Allocate temporary buffers for ring operations
-    void *send_chunk = malloc(total_size);
-    void *recv_chunk = malloc(total_size);
-    
-    if (!send_chunk || !recv_chunk) {
-        fprintf(stderr, "Failed to allocate temporary buffers\n");
-        return -1;
-    }
     
     // Phase 1: Reduce-scatter using ring algorithm
     // Each server will accumulate values for its designated chunk
@@ -194,8 +186,8 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         int recv_chunk_id = (idx - step - 1 + n) % n;
         
         // Calculate offsets and sizes
-        int send_offset = send_chunk_id * chunk_size;
-        int recv_offset = recv_chunk_id * chunk_size;
+        size_t send_offset = send_chunk_id * chunk_size * dtype_size;
+        size_t recv_offset = recv_chunk_id * chunk_size * dtype_size;
         
         int send_count = chunk_size;
         int recv_count = chunk_size;
@@ -212,29 +204,17 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         size_t recv_bytes = recv_count * dtype_size;
         
         // Copy data to send buffer
-        memcpy(send_chunk, (char *)recvbuf + send_offset * dtype_size, send_bytes);
+        memcpy(rdma_sendbuf, (char *)recvbuf + send_offset, send_bytes);
         
         // Transfer data using selected method (rendezvous or eager)
-        if (transfer_data(pg_handle, send_chunk, recv_chunk, 
-                         (send_bytes > recv_bytes) ? send_bytes : recv_bytes) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
+        transfer_data_rendezvous(pg_handle);
         
         // Perform reduction operation
-        perform_operation((char *)recvbuf + recv_offset * dtype_size,
-                         recv_chunk,
+        perform_operation((char *)recvbuf + recv_offset,
+                         rdma_recvbuf,
                          recv_count,
                          datatype,
                          op);
-        
-        // Synchronize before next step
-        if (synchronize_servers(pg_handle) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
     }
     
     // Phase 2: All-gather using ring algorithm
@@ -245,8 +225,8 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         int recv_chunk_id = (idx - step - 1 + n) % n;
         
         // Calculate offsets and sizes
-        int send_offset = send_chunk_id * chunk_size;
-        int recv_offset = recv_chunk_id * chunk_size;
+        size_t send_offset = send_chunk_id * chunk_size * dtype_size;
+        size_t recv_offset = recv_chunk_id * chunk_size * dtype_size;
         
         int send_count = chunk_size;
         int recv_count = chunk_size;
@@ -263,29 +243,15 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         size_t recv_bytes = recv_count * dtype_size;
         
         // Copy data to send buffer
-        memcpy(send_chunk, (char *)recvbuf + send_offset * dtype_size, send_bytes);
+        memcpy(rdma_sendbuf, (char *)recvbuf + send_offset, send_bytes);
         
         // Transfer data using selected method (rendezvous or eager)
-        if (transfer_data(pg_handle, send_chunk, recv_chunk,
-                         (send_bytes > recv_bytes) ? send_bytes : recv_bytes) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
+        transfer_data_rendezvous(pg_handle);
         
         // Copy received chunk to result buffer
-        memcpy((char *)recvbuf + recv_offset * dtype_size, recv_chunk, recv_bytes);
+        memcpy((char *)recvbuf + recv_offset, rdma_recvbuf, recv_bytes);
         
-        // Synchronize before next step
-        if (synchronize_servers(pg_handle) < 0) {
-            free(send_chunk);
-            free(recv_chunk);
-            return -1;
-        }
     }
-    
-    free(send_chunk);
-    free(recv_chunk);
     
     return 0;
 }
