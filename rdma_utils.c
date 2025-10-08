@@ -1,7 +1,7 @@
 #include "rdma_utils.h"
 
 
-int rdma_write_to_right(pg_handle_t *pg_handle, char* message, size_t msg_len) {   
+int rdma_write_to_right(pg_handle_t *pg_handle) {   
     if(msg_len > RDMA_BUFFER_SIZE) {
         fprintf(stderr, "Message length exceeds buffer size\n");
         return 1;
@@ -9,9 +9,6 @@ int rdma_write_to_right(pg_handle_t *pg_handle, char* message, size_t msg_len) {
     // Get neighbors (ring topology)
     int rank = pg_handle->rank;
     int right_neighbor = (rank + 1) % pg_handle->size;
-    // Prepare a message in our send buffer
-    memcpy(pg_handle->sendbuf, message, strlen(message) + 1);
-    
 
     // Send message to right neighbor using RDMA Write
     // We write to the right neighbor's receive buffer

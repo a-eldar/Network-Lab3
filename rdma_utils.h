@@ -20,13 +20,12 @@
 #include "pg_handle.h"
 
 /**
- * Writes a message to the right neighbor in a ring topology using RDMA Write.
+ * RDMA-Writes the send buf to the right neighbor in a ring topology using RDMA Write.
+ * @note Requires that the sendbuf is already populated with the message to send.
  * @param pg_handle Pointer to the process group handle.
- * @param message The message to send.
- * @param msg_len Length of the message.
  * @return 0 on success, 1 on failure.
  */
-int rdma_write_to_right(pg_handle_t *pg_handle, char* message, size_t msg_len);  
+int rdma_write_to_right(pg_handle_t *pg_handle);  
 
 /**
  * Polls the completion queue for a work completion.

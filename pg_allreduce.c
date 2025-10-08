@@ -95,27 +95,26 @@ static int synchronize_servers(PGHandle *pg_handle) {
 }
 
 // Rendezvous method: Local write + remote read
-static int transfer_data_rendezvous(PGHandle *pg_handle, void *send_data, void *recv_data, size_t size) {
-    // Write data locally for the left neighbor to read
-    memcpy(pg_handle->left_conn->buf, send_data, size);
+static int transfer_data_rendezvous(pg_handle_t *pg_handle) {
     
-    // Synchronize to ensure data is written
-    if (synchronize_servers(pg_handle) < 0) {
-        return -1;
+    if(rdma_write_to_right(pg_handle)){
+        fprintf(stderr, "Rank %d: rdma_write_to_right failed\n", rank);
+        pg_close(pg_handle_void);
+        return 1;
     }
-    
-    // Read data from left neighbor (server on our left writes, we read from them)
-    if (post_rdma_read(pg_handle->right_conn,
-                      recv_data,
-                      size,
-                      pg_handle->left_conn->remote_addr,
-                      pg_handle->left_conn->remote_rkey) < 0) {
-        return -1;
+    // Wait for completion
+    if(poll_for_completion(pg_handle) != 0) {
+        fprintf(stderr, "Rank %d: poll_for_completion failed\n", rank);
+        pg_close(pg_handle_void);
+        return 1;
     }
-    
-    if (wait_for_completion(pg_handle->right_conn) < 0) {
-        return -1;
-    }
+
+    // Small delay to let neighbors write
+    sleep(1);
+
+    // Print what we received in our recvbuf (left neighbor should have written here)
+    printf("Rank %d: Received buffer = \"%s\"\n", rank, (char *)pg_handle->recvbuf);
+
     
     return 0;
 }
