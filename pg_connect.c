@@ -237,13 +237,13 @@ int connect_process_group(char *servername, void **pg_handle, int rank) {
     // Allocate and fill handle - this is a pointer to a struct that will be used to store the RDMA resources for this process
     pg_handle_t *handle = (pg_handle_t *)calloc(1, sizeof(pg_handle_t));
     if (!handle) {
-        for (int i = 0; i < size; ++i) free(names[i]);
-        free(names);
+        for (int i = 0; i < size; ++i) free(server_list[i]);
+        free(server_list);
         return -1;
     }
     handle->rank = rank;
     handle->size = size;
-    handle->servernames = names;
+    handle->servernames = server_list;
     handle->remote_rkeys = calloc(size, sizeof(uint32_t));
     handle->remote_addrs = calloc(size, sizeof(uintptr_t));
 
