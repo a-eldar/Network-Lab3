@@ -3,9 +3,6 @@
 
 #include "pg_handle.h"
 
-// Connect to process group
-int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_handle);
-
 /**
  * @brief Perform an all-reduce operation across the process group.
  * @param sendbuf Pointer to the local input buffer (count elements of 'datatype').
@@ -18,7 +15,6 @@ int connect_process_group(char** serverlist, int len, int idx, PGHandle* pg_hand
  */
 int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OPERATION op, PGHandle* pg_handle);
 
-// Close process group connection
-int pg_close(PGHandle* pg_handle);
+
 
 #endif // PG_ALLREDUCE_H
