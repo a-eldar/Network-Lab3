@@ -108,7 +108,7 @@ static int transfer_data_rendezvous(PGHandle *pg_handle) {
     }
 
     // Small delay to let neighbors write
-    sleep(1);
+    sleep(5);
 
     // Print what we received in our recvbuf (left neighbor should have written here)
     printf("Rank %d: Received buffer = \"%s\"\n", pg_handle->rank, (char *)pg_handle->recvbuf);
@@ -181,6 +181,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
     // Phase 1: Reduce-scatter using ring algorithm
     // Each server will accumulate values for its designated chunk
     for (int step = 0; step < n - 1; step++) {
+        memset(rdma_sendbuf, 0, pg_handle->bufsize);
         // Calculate which chunk to send/receive
         int send_chunk_id = (idx - step + n) % n;
         int recv_chunk_id = (idx - step - 1 + n) % n;
@@ -208,6 +209,8 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         
         // Transfer data using selected method (rendezvous or eager)
         transfer_data_rendezvous(pg_handle);
+
+        
         
         // Perform reduction operation
         perform_operation((char *)recvbuf + recv_offset,
