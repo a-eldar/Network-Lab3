@@ -111,7 +111,7 @@ static int transfer_data_rendezvous(PGHandle *pg_handle) {
     sleep(1);
 
     // Print what we received in our recvbuf (left neighbor should have written here)
-    printf("Rank %d: Received buffer = \"%s\"\n", rank, (char *)pg_handle->recvbuf);
+    printf("Rank %d: Received buffer = \"%s\"\n", pg_handle->rank, (char *)pg_handle->recvbuf);
 
     
     return 0;
