@@ -44,10 +44,11 @@ extern "C" {
  * connect_process_group:
  *   servername: comma-separated list of hostnames or IPs (e.g. "host1,host2,host3")
  *   pg_handle: pointer to a void* that will be set to a newly allocated pg_handle_t*
+ *   rank: rank of this process in the group (0 to size-1)
  *
  * Returns 0 on success, -1 on failure.
  */
-int connect_process_group(char *servername, void **pg_handle);
+int connect_process_group(char *servername, void **pg_handle, int rank);
 
 /*
  * pg_all_reduce:
