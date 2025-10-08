@@ -127,7 +127,7 @@ static int parse_server_list(const char *list, char ***out_names, int *out_count
  * @brief Clean up all RDMA resources in the process group pg_handle
  * @param pg_handle: pointer to the process group pg_handle
  */
-static void cleanup_pg_handle(pg_handle_t *pg_handle) {
+static void cleanup_pg_handle(PGHandle *pg_handle) {
     if (!pg_handle) return;
     if (pg_handle->mr_send) ibv_dereg_mr(pg_handle->mr_send);
     if (pg_handle->mr_recv) ibv_dereg_mr(pg_handle->mr_recv);
@@ -235,7 +235,7 @@ int connect_process_group(char *servername, void **pg_handle, int rank) {
     }
 
     // Allocate and fill handle - this is a pointer to a struct that will be used to store the RDMA resources for this process
-    pg_handle_t *handle = (pg_handle_t *)calloc(1, sizeof(pg_handle_t));
+    PGHandle *handle = (PGHandle *)calloc(1, sizeof(PGHandle));
     if (!handle) {
         for (int i = 0; i < size; ++i) free(server_list[i]);
         free(server_list);
@@ -510,7 +510,7 @@ int connect_process_group(char *servername, void **pg_handle, int rank) {
  * @return 0 on success, -1 on failure
  */
 int pg_close(void *pg_handle) {
-    pg_handle_t *handle = (pg_handle_t *)pg_handle;
+    PGHandle *handle = (PGHandle *)pg_handle;
     if (!handle) return -1;
     cleanup_pg_handle(handle);
     return 0;

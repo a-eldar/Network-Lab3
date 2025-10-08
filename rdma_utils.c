@@ -1,7 +1,7 @@
 #include "rdma_utils.h"
 
 
-int rdma_write_to_right(pg_handle_t *pg_handle) {   
+int rdma_write_to_right(PGHandle *pg_handle) {   
     if(msg_len > RDMA_BUFFER_SIZE) {
         fprintf(stderr, "Message length exceeds buffer size\n");
         return 1;
@@ -42,7 +42,7 @@ int rdma_write_to_right(pg_handle_t *pg_handle) {
     return 0;
 }
 
-int poll_for_completion(pg_handle_t *pg_handle) {
+int poll_for_completion(PGHandle *pg_handle) {
     int rank = pg_handle->rank;
     struct ibv_wc wc;
     int ne;

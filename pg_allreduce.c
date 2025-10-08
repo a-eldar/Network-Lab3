@@ -95,7 +95,7 @@ static int synchronize_servers(PGHandle *pg_handle) {
 }
 
 // Rendezvous method: Local write + remote read
-static int transfer_data_rendezvous(pg_handle_t *pg_handle) {
+static int transfer_data_rendezvous(PGHandle *pg_handle) {
     
     if(rdma_write_to_right(pg_handle)){
         fprintf(stderr, "Rank %d: rdma_write_to_right failed\n", rank);

@@ -70,7 +70,7 @@ typedef struct{
 
     /* optional extras that might be useful to keep */
     /* page size or other config values could be added here */
-} pg_handle_t;
+} PGHandle;
 
 
 

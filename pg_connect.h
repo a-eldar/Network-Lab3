@@ -11,7 +11,7 @@ extern "C" {
  * Header for process-group RDMA connect code (ring connection + RDMA resources).
  *
  * This header exposes:
- *  - pg_handle_t : the process-group handle storing RDMA objects
+ *  - PGHandle : the process-group handle storing RDMA objects
  *  - qp_info_t, mr_info_t : small POD structs exchanged over TCP
  *  - DATATYPE, OPERATION enums : basic collective args
  *  - public API: connect_process_group, pg_all_reduce, pg_close
@@ -43,7 +43,7 @@ extern "C" {
  *
  * connect_process_group:
  *   servername: comma-separated list of hostnames or IPs (e.g. "host1,host2,host3")
- *   pg_handle: pointer to a void* that will be set to a newly allocated pg_handle_t*
+ *   pg_handle: pointer to a void* that will be set to a newly allocated PGHandle*
  *   rank: rank of this process in the group (0 to size-1)
  *
  * Returns 0 on success, -1 on failure.
