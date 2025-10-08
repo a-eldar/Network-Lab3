@@ -2,10 +2,6 @@
 
 
 int rdma_write_to_right(PGHandle *pg_handle) {   
-    if(msg_len > RDMA_BUFFER_SIZE) {
-        fprintf(stderr, "Message length exceeds buffer size\n");
-        return 1;
-    }
     // Get neighbors (ring topology)
     int rank = pg_handle->rank;
     int right_neighbor = (rank + 1) % pg_handle->size;
@@ -14,7 +10,7 @@ int rdma_write_to_right(PGHandle *pg_handle) {
     // We write to the right neighbor's receive buffer
     struct ibv_sge sge = {
         .addr = (uintptr_t)pg_handle->sendbuf,
-        .length = strlen(message) + 1,
+        .length = pg_handle->bufsize,
         .lkey = pg_handle->mr_send->lkey
     };
     
