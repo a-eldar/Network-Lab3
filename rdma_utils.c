@@ -4,7 +4,7 @@
 int rdma_write_to_right(PGHandle *pg_handle) {   
     // Get neighbors (ring topology)
     int rank = pg_handle->rank;
-    int right_neighbor = (rank + 1) % pg_handle->size;
+    int right_neighbor = (rank + 1) % pg_handle->num_servers;
 
     // Send message to right neighbor using RDMA Write
     // We write to the right neighbor's receive buffer

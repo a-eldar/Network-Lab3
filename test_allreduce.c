@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
     // Cast handle to the correct type
     PGHandle *pg_handle = (PGHandle *)pg_handle_void;
     
-    printf("Rank %d: Connected! Size=%d\n", pg_handle->rank, pg_handle->size);
+    printf("Rank %d: Connected! Size=%d\n", pg_handle->rank, pg_handle->num_servers);
 
     int size = 21;
     // Prepare a message in our send buffer

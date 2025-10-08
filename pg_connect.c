@@ -145,7 +145,7 @@ static void cleanup_pg_handle(PGHandle *pg_handle) {
     if (pg_handle->remote_rkeys) free(pg_handle->remote_rkeys);
     if (pg_handle->remote_addrs) free(pg_handle->remote_addrs);
     if (pg_handle->servernames) {
-        for (int i = 0; i < pg_handle->size; ++i) free(pg_handle->servernames[i]);
+        for (int i = 0; i < pg_handle->num_servers; ++i) free(pg_handle->servernames[i]);
         free(pg_handle->servernames);
     }
     free(pg_handle);
@@ -242,7 +242,7 @@ int connect_process_group(char *servername, void **pg_handle, int rank) {
         return -1;
     }
     handle->rank = rank;
-    handle->size = size;
+    handle->num_servers = size;
     handle->servernames = server_list;
     handle->remote_rkeys = calloc(size, sizeof(uint32_t));
     handle->remote_addrs = calloc(size, sizeof(uintptr_t));
@@ -311,8 +311,8 @@ int connect_process_group(char *servername, void **pg_handle, int rank) {
 
     // Exchange QP info with neighbors
 
-    int left = (handle->rank - 1 + handle->size) % handle->size;
-    int right = (handle->rank + 1) % handle->size;
+    int left = (handle->rank - 1 + handle->num_servers) % handle->num_servers;
+    int right = (handle->rank + 1) % handle->num_servers;
 
     // Gather local QP info
     struct ibv_port_attr port_attr;
@@ -334,7 +334,7 @@ int connect_process_group(char *servername, void **pg_handle, int rank) {
 
     if (handle->rank == 0) {
         // Rank 0: connect first, then accept  (to avoid deadlock)
-        sock_right = tcp_connect(handle->servernames[right], QP_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->size));
+        sock_right = tcp_connect(handle->servernames[right], QP_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->num_servers));
         if (sock_right < 0) {
             cleanup_pg_handle(handle);
             perror("tcp_connect right");
@@ -365,7 +365,7 @@ int connect_process_group(char *servername, void **pg_handle, int rank) {
         write(sock_left, &myinfo[0], sizeof(qp_info_t));
         close(sock_left);
 
-        sock_right = tcp_connect(handle->servernames[right], QP_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->size));
+        sock_right = tcp_connect(handle->servernames[right], QP_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->num_servers));
         if (sock_right < 0) {
             cleanup_pg_handle(handle);
             perror("tcp_connect right");
@@ -439,7 +439,7 @@ int connect_process_group(char *servername, void **pg_handle, int rank) {
     my_mrinfo.addr = (uintptr_t)handle->recvbuf;
 
     if (handle->rank == 0){  // connect first, then accept
-        sock_right = tcp_connect(handle->servernames[right], MR_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->size)); // Use a different port for MR exchange
+        sock_right = tcp_connect(handle->servernames[right], MR_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->num_servers)); // Use a different port for MR exchange
         if (sock_right < 0) {
             cleanup_pg_handle(handle);
             perror("tcp_connect right (MR)");
@@ -479,7 +479,7 @@ int connect_process_group(char *servername, void **pg_handle, int rank) {
         handle->remote_rkeys[left] = left_mrinfo.rkey;
         handle->remote_addrs[left] = left_mrinfo.addr;
 
-        sock_right = tcp_connect(handle->servernames[right], MR_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->size)); // Use a different port for MR exchange
+        sock_right = tcp_connect(handle->servernames[right], MR_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->num_servers)); // Use a different port for MR exchange
         if (sock_right < 0) {
             cleanup_pg_handle(handle);
             perror("tcp_connect right (MR)");
