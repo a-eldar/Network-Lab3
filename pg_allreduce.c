@@ -108,6 +108,11 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         return -1;
     }
     
+    if(ring_barrier(pg_handle) != 0) {
+        fprintf(stderr, "Rank %d: BARRIER ring_barrier failed\n", pg_handle->rank);
+        return 1;
+    }
+
     // Phase 1: Reduce-scatter using ring algorithm
     // Each server will accumulate values for its designated chunk
     for (int step = 0; step < n - 1; step++) {
