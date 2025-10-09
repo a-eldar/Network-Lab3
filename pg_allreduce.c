@@ -95,9 +95,9 @@ static void perform_operation(void *dst, const void *src, int count, DATATYPE da
 // }
 
 // Rendezvous method: Local write + remote read
-static int transfer_data_rendezvous(PGHandle *pg_handle) {
+static int transfer_data_rendezvous(PGHandle *pg_handle, size_t actual_size) {
     
-    if(rdma_write_to_right(pg_handle)){
+    if(rdma_write_to_right(pg_handle, actual_size) != 0) {
         fprintf(stderr, "Rank %d: rdma_write_to_right failed\n", pg_handle->rank);
         return 1;
     }
@@ -225,7 +225,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         // ------------------------------------------------
         
         // Transfer data using selected method (rendezvous or eager)
-        transfer_data_rendezvous(pg_handle);
+        transfer_data_rendezvous(pg_handle, send_bytes);
 
         // DEBUG
         
@@ -289,7 +289,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         memcpy(rdma_sendbuf, (char *)recvbuf + send_offset, send_bytes);
         
         // Transfer data using selected method (rendezvous or eager)
-        transfer_data_rendezvous(pg_handle);
+        transfer_data_rendezvous(pg_handle, send_bytes);
         
         // Copy received chunk to result buffer
         memcpy((char *)recvbuf + recv_offset, rdma_recvbuf, recv_bytes);

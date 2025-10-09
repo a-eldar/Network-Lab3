@@ -25,7 +25,7 @@
  * @param pg_handle Pointer to the process group handle.
  * @return 0 on success, 1 on failure.
  */
-int rdma_write_to_right(PGHandle *pg_handle);  
+int rdma_write_to_right(PGHandle *pg_handle, size_t actual_size);  
 
 /**
  * Polls the completion queue for a work completion.

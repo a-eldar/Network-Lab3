@@ -1,7 +1,7 @@
 #include "rdma_utils.h"
 
 
-int rdma_write_to_right(PGHandle *pg_handle) {   
+int rdma_write_to_right(PGHandle *pg_handle, size_t actual_size) {   
     // Get neighbors (ring topology)
     int rank = pg_handle->rank;
     int right_neighbor = (rank + 1) % pg_handle->num_servers;
@@ -10,7 +10,7 @@ int rdma_write_to_right(PGHandle *pg_handle) {
     // We write to the right neighbor's receive buffer
     struct ibv_sge sge = {
         .addr = (uintptr_t)pg_handle->sendbuf,
-        .length = pg_handle->bufsize,
+        .length = actual_size,
         .lkey = pg_handle->mr_send->lkey
     };
     
