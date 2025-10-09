@@ -78,7 +78,7 @@ int ring_barrier(PGHandle *pg_handle) {
 
     if (rank != 0) {
         // Spin on our local recvbuf sync location
-        int timeout = 0;
+        u_int64_t timeout = 0;
         
         while (*local_sync_ptr != 1) {
             timeout++;
@@ -125,7 +125,7 @@ int ring_barrier(PGHandle *pg_handle) {
     // Step 4: Wait for left neighbor to write to our buffer
     if (rank == 0) {
         // Spin on our local recvbuf sync location
-        int timeout = 0;
+        uint64_t timeout = 0;
         uint64_t max_timeout = MAX_TIMEOUT * 1000; // Longer timeout for rank 0
         
         while (*local_sync_ptr != 1) {
