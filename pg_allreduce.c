@@ -52,10 +52,10 @@ static void perform_operation(void *dst, const void *src, int count, DATATYPE da
 
 // Rendezvous method: Local write + remote read
 static int transfer_data_rendezvous(PGHandle *pg_handle, size_t actual_size) {
-    if(ring_barrier(pg_handle) != 0) {
-        fprintf(stderr, "Rank %d: BARRIER ring_barrier failed\n", pg_handle->rank);
-        return 1;
-    }
+    // if(ring_barrier(pg_handle) != 0) {
+    //     fprintf(stderr, "Rank %d: BARRIER ring_barrier failed\n", pg_handle->rank);
+    //     return 1;
+    // }
 
     if(rdma_write_to_right(pg_handle, actual_size) != 0) {
         fprintf(stderr, "Rank %d: rdma_write_to_right failed\n", pg_handle->rank);
