@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/time.h>  // For gettimeofday
 
 // Define transfer method - easy to swap between RENDEZVOUS and EAGER
 #define USE_RENDEZVOUS_METHOD 1  // Set to 0 for EAGER method (using RDMA Write)
@@ -96,9 +97,9 @@ static void perform_operation(void *dst, const void *src, int count, DATATYPE da
 
 // Rendezvous method: Local write + remote read
 static int transfer_data_rendezvous(PGHandle *pg_handle, size_t actual_size) {
-    
+    printf("\n");
     if(ring_barrier(pg_handle) != 0) {
-        fprintf(stderr, "Rank %d: ring_barrier failed\n", pg_handle->rank);
+        fprintf(stderr, "Rank %d: BARRIER ring_barrier failed\n", pg_handle->rank);
         return 1;
     }
 
@@ -111,14 +112,21 @@ static int transfer_data_rendezvous(PGHandle *pg_handle, size_t actual_size) {
         fprintf(stderr, "Rank %d: poll_for_completion failed\n", pg_handle->rank);
         return 1;
     }
+    printf("Rank %d: RDMA write completed successfully\n", rank);
+
 
     if(ring_barrier(pg_handle) != 0) {
-        fprintf(stderr, "Rank %d: ring_barrier failed\n", pg_handle->rank);
+        fprintf(stderr, "Rank %d: BARRIER ring_barrier failed\n", pg_handle->rank);
         return 1;
     }
     // DEBUG
-    printf("Rank %d: current time after second barrier: %ld\n", pg_handle->rank, time(NULL));
-    
+    // print the current time in milliseconds
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    long long milliseconds = (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    printf("Rank %d: Completed transfer at %lld ms\n\n", pg_handle->rank, milliseconds);
+    // ------------------------------------------------
+
     return 0;
 }
 
@@ -227,6 +235,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
                 printf("%f ", ((double *)rdma_sendbuf)[i]);
             }
         }
+        printf("\n");
         // ------------------------------------------------
         
         // Transfer data using selected method (rendezvous or eager)
@@ -263,7 +272,7 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
             printf("%f ", ((double *)recvbuf)[i]);
         }
     }
-    printf("\n");
+    printf("\n\n");
     
     // Phase 2: All-gather using ring algorithm
     // Each server broadcasts its chunk to all others

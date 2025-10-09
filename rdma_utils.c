@@ -56,7 +56,6 @@ int poll_for_completion(PGHandle *pg_handle) {
         return 1;
     }
     
-    printf("Rank %d: RDMA write completed successfully\n", rank);
     return 0;
 }
 
@@ -80,7 +79,7 @@ int ring_barrier(PGHandle *pg_handle) {
     if (rank != 0) {
         // Spin on our local recvbuf sync location
         int timeout = 0;
-        const int MAX_TIMEOUT = 100000000;  // 100 million iterations
+        const int MAX_TIMEOUT = 1000000000;  // 100 million iterations
         
         while (*local_sync_ptr != 1) {
             timeout++;
@@ -128,7 +127,7 @@ int ring_barrier(PGHandle *pg_handle) {
     if (rank == 0) {
         // Spin on our local recvbuf sync location
         int timeout = 0;
-        const int MAX_TIMEOUT = 100000000;  // 100 million iterations
+        const int MAX_TIMEOUT = 1000000000;  // 100 million iterations
         
         while (*local_sync_ptr != 1) {
             timeout++;
