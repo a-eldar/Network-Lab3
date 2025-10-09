@@ -112,7 +112,7 @@ static int transfer_data_rendezvous(PGHandle *pg_handle, size_t actual_size) {
         fprintf(stderr, "Rank %d: poll_for_completion failed\n", pg_handle->rank);
         return 1;
     }
-    printf("Rank %d: RDMA write completed successfully\n", rank);
+    printf("Rank %d: RDMA write completed successfully\n", pg_handle->rank);
 
 
     if(ring_barrier(pg_handle) != 0) {
