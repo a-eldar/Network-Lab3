@@ -1,6 +1,7 @@
 #include "rdma_utils.h"
 
 
+
 int rdma_write_to_right(PGHandle *pg_handle, size_t actual_size) {   
     // Get neighbors (ring topology)
     int rank = pg_handle->rank;
@@ -72,15 +73,17 @@ int ring_barrier(PGHandle *pg_handle) {
     printf("Rank %d: Entering barrier\n", rank);
     
     // Step 1: Set our local sync flag to 1 (so we can write it to neighbor)
-    int sync_flag = 1;
+    int sync_flag = -1;
     int *sync_source = (int *)((char *)pg_handle->sendbuf + sync_offset);
     *sync_source = sync_flag;
-
+    
+    // sleep for half a second to ensure the value is set before we start
+    usleep(1000000);
     if (rank != 0) {
         // Spin on our local recvbuf sync location
         u_int64_t timeout = 0;
         
-        while (*local_sync_ptr != 1) {
+        while (*local_sync_ptr != sync_flag) {
             timeout++;
             if (timeout > MAX_TIMEOUT) {
                 fprintf(stderr, "Rank %d: Barrier timeout - left neighbor didn't signal (flag=%d)\n", 
@@ -128,7 +131,7 @@ int ring_barrier(PGHandle *pg_handle) {
         uint64_t timeout = 0;
         uint64_t max_timeout = MAX_TIMEOUT * 1000; // Longer timeout for rank 0
         
-        while (*local_sync_ptr != 1) {
+        while (*local_sync_ptr != sync_flag) {
             timeout++;
             if (timeout > max_timeout) {
                 fprintf(stderr, "Rank %d: Barrier timeout - left neighbor didn't signal (flag=%d)\n", 
