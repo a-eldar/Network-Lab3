@@ -19,6 +19,8 @@
 #include <infiniband/verbs.h>
 #include "pg_handle.h"
 
+#define MAX_TIMEOUT 100000000 // 100 million iterations
+
 /**
  * RDMA-Writes the send buf to the right neighbor in a ring topology using RDMA Write.
  * @note Requires that the sendbuf is already populated with the message to send.

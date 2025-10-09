@@ -79,7 +79,6 @@ int ring_barrier(PGHandle *pg_handle) {
     if (rank != 0) {
         // Spin on our local recvbuf sync location
         int timeout = 0;
-        const int MAX_TIMEOUT = 100000000;  // 100 million iterations
         
         while (*local_sync_ptr != 1) {
             timeout++;
@@ -127,11 +126,11 @@ int ring_barrier(PGHandle *pg_handle) {
     if (rank == 0) {
         // Spin on our local recvbuf sync location
         int timeout = 0;
-        const int MAX_TIMEOUT = 1000000000;  // 100 million iterations
+        int max_timeout = MAX_TIMEOUT * pg_handle->num_servers; // Longer timeout for rank 0
         
         while (*local_sync_ptr != 1) {
             timeout++;
-            if (timeout > MAX_TIMEOUT) {
+            if (timeout > max_timeout) {
                 fprintf(stderr, "Rank %d: Barrier timeout - left neighbor didn't signal (flag=%d)\n", 
                         rank, *local_sync_ptr);
                 return 1;
