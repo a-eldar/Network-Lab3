@@ -76,6 +76,21 @@ int ring_barrier(PGHandle *pg_handle) {
     int sync_flag = 1;
     int *sync_source = (int *)((char *)pg_handle->sendbuf + sync_offset);
     *sync_source = sync_flag;
+
+    if (rank != 0) {
+        // Spin on our local recvbuf sync location
+        int timeout = 0;
+        const int MAX_TIMEOUT = 100000000;  // 100 million iterations
+        
+        while (*local_sync_ptr != 1) {
+            timeout++;
+            if (timeout > MAX_TIMEOUT) {
+                fprintf(stderr, "Rank %d: Barrier timeout - left neighbor didn't signal (flag=%d)\n", 
+                        rank, *local_sync_ptr);
+                return 1;
+            }
+        }
+    }
     
     // Step 2: Write sync flag to right neighbor's recvbuf at sync_offset
     struct ibv_sge sge = {
@@ -110,16 +125,18 @@ int ring_barrier(PGHandle *pg_handle) {
     }
     
     // Step 4: Wait for left neighbor to write to our buffer
-    // Spin on our local recvbuf sync location
-    int timeout = 0;
-    const int MAX_TIMEOUT = 100000000;  // 100 million iterations
-    
-    while (*local_sync_ptr != 1) {
-        timeout++;
-        if (timeout > MAX_TIMEOUT) {
-            fprintf(stderr, "Rank %d: Barrier timeout - left neighbor didn't signal (flag=%d)\n", 
-                    rank, *local_sync_ptr);
-            return 1;
+    if (rank == 0) {
+        // Spin on our local recvbuf sync location
+        int timeout = 0;
+        const int MAX_TIMEOUT = 100000000;  // 100 million iterations
+        
+        while (*local_sync_ptr != 1) {
+            timeout++;
+            if (timeout > MAX_TIMEOUT) {
+                fprintf(stderr, "Rank %d: Barrier timeout - left neighbor didn't signal (flag=%d)\n", 
+                        rank, *local_sync_ptr);
+                return 1;
+            }
         }
     }
     
