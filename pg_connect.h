@@ -39,6 +39,9 @@ extern "C" {
 /* Maximum server name length used in code */
 #define PG_MAX_HOSTNAME_LEN 256
 
+/* Number of connection attempts used in TCP connection phase */
+#define PG_TCP_CONN_ATTEMPTS 20 
+
 /* Public API
  *
  * connect_process_group:

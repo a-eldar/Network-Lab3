@@ -52,7 +52,7 @@ static int tcp_connect(const char *hostname, int port) {
 
     int sock = -1;
     for (struct addrinfo *rp = res_connect; rp; rp = rp->ai_next) {
-        for (int attempt = 0; attempt < 10; ++attempt) { // Try 10 times
+        for (int attempt = 0; attempt < PG_TCP_CONN_ATTEMPTS; ++attempt) { // Try 20 times
             sock = socket(rp->ai_family, rp->ai_socktype, rp->ai_protocol);
             if (sock == -1) continue;
             if (connect(sock, rp->ai_addr, rp->ai_addrlen) == 0) {
@@ -65,7 +65,7 @@ static int tcp_connect(const char *hostname, int port) {
         }
     }
 
-    printf("[ERROR] Failed to connect to %s:%d after 10 attempts\n", ip_str, port);
+    printf("[ERROR] Failed to connect to %s:%d after 20 attempts\n", ip_str, port);
     freeaddrinfo(res_connect);
     freeaddrinfo(res);
     return -1;
