@@ -29,8 +29,6 @@ int rdma_write_to_right(PGHandle *pg_handle, size_t actual_size) {
     };
     
     struct ibv_send_wr *bad_wr;
-    
-    printf("Rank %d: Posting RDMA write to rank %d...\n", rank, right_neighbor);
     if (ibv_post_send(pg_handle->qps[1], &wr, &bad_wr) != 0) {
         fprintf(stderr, "Rank %d: Failed to post RDMA write\n", rank);
         return 1;
@@ -70,7 +68,6 @@ int ring_barrier(PGHandle *pg_handle) {
     size_t sync_offset = pg_handle->bufsize - sizeof(int);
     volatile int *local_sync_ptr = (volatile int *)((char *)pg_handle->recvbuf + sync_offset);
     
-    printf("Rank %d: Entering barrier\n", rank);
     
     // Step 1: Set our local sync flag to 1 (so we can write it to neighbor)
     int sync_flag = -1;
@@ -140,8 +137,6 @@ int ring_barrier(PGHandle *pg_handle) {
             }
         }
     }
-    
-    printf("Rank %d: Barrier complete (received signal from left)\n", rank);
     
     // Step 5: Reset the flag for next barrier
     *local_sync_ptr = 0;
