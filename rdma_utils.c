@@ -74,7 +74,7 @@ int ring_barrier(PGHandle *pg_handle) {
     int *sync_source = (int *)((char *)pg_handle->sendbuf + sync_offset);
     *sync_source = sync_flag;
     
-    // sleep for half a second to ensure the value is set before we start
+    // sleep for a second to ensure the value is set before we start
     usleep(100000);
     if (rank != 0) {
         // Spin on our local recvbuf sync location
