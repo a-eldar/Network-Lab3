@@ -33,4 +33,13 @@ int rdma_write_to_right(PGHandle *pg_handle, size_t actual_size);
  * @return 0 on success, 1 on failure.
  */
 int poll_for_completion(PGHandle *pg_handle);
+
+/**
+ * Simple ring barrier using RDMA Write to signal readiness.
+ * Each process writes a sync flag to its right neighbor and waits for
+ * the left neighbor to write its flag.
+ * @param pg_handle Pointer to the process group handle.
+ * @return 0 on success, 1 on failure.
+ */
+int ring_barrier(PGHandle *pg_handle);
 #endif // RDMA_UTILS_H

@@ -97,6 +97,11 @@ static void perform_operation(void *dst, const void *src, int count, DATATYPE da
 // Rendezvous method: Local write + remote read
 static int transfer_data_rendezvous(PGHandle *pg_handle, size_t actual_size) {
     
+    if(ring_barrier(pg_handle) != 0) {
+        fprintf(stderr, "Rank %d: ring_barrier failed\n", pg_handle->rank);
+        return 1;
+    }
+
     if(rdma_write_to_right(pg_handle, actual_size) != 0) {
         fprintf(stderr, "Rank %d: rdma_write_to_right failed\n", pg_handle->rank);
         return 1;
@@ -107,12 +112,12 @@ static int transfer_data_rendezvous(PGHandle *pg_handle, size_t actual_size) {
         return 1;
     }
 
-    // Small delay to let neighbors write of 7 seconds
-    usleep(7000000);
-
-    // Print what we received in our recvbuf (left neighbor should have written here)
-    //printf("Rank %d: Received buffer = \"%s\"\n", pg_handle->rank, (char *)pg_handle->recvbuf);
-
+    if(ring_barrier(pg_handle) != 0) {
+        fprintf(stderr, "Rank %d: ring_barrier failed\n", pg_handle->rank);
+        return 1;
+    }
+    // DEBUG
+    printf("Rank %d: current time after second barrier: %ld\n", pg_handle->rank, time(NULL));
     
     return 0;
 }
