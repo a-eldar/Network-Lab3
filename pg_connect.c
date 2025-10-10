@@ -157,261 +157,224 @@ static int open_rdma_device(PGHandle *pg_handle) {
     }
     return 0;
 }
+ 
 
 
-int connect_process_group(char **server_list, int size, void **pg_handle, int rank) {
-    // Allocate and fill handle - this is a pointer to a struct that will be used to store the RDMA resources for this process
+
+// Helper: Allocate and initialize PGHandle
+static PGHandle* allocate_pg_handle(char **server_list, int size, int rank) {
     PGHandle *handle = (PGHandle *)calloc(1, sizeof(PGHandle));
-    if (!handle) {
-        for (int i = 0; i < size; ++i) free(server_list[i]);
-        free(server_list);
-        return -1;
-    }
+    if (!handle) return NULL;
     handle->rank = rank;
     handle->num_servers = size;
     handle->servernames = server_list;
     handle->remote_rkeys = calloc(size, sizeof(uint32_t));
     handle->remote_addrs = calloc(size, sizeof(uintptr_t));
+    return handle;
+}
 
-    *pg_handle = handle;
-
-    if (open_rdma_device(handle) != 0) {
-        pg_close(handle);
-        return -1;
-    }
-
-    // 2. Allocate Protection Domain
+// Helper: Setup RDMA device, PD, CQ, QPs
+static int setup_rdma_resources(PGHandle *handle) {
+    if (open_rdma_device(handle) != 0) return -1;
     handle->pd = ibv_alloc_pd(handle->ctx);
-    if (!handle->pd) {
-        pg_close(handle);
-        fprintf(stderr, "Failed to allocate PD\n");
-        return -1;
-    }
-
-    // 3. Create Completion Queue
+    if (!handle->pd) return -1;
     handle->cq = ibv_create_cq(handle->ctx, 16, NULL, NULL, 0);
-    if (!handle->cq) {
-        pg_close(handle);
-        fprintf(stderr, "Failed to create CQ\n");
-        return -1;
-    }
-
-    // 3.5. Create QPs for left and right neighbors in the ring
-    handle->qps = calloc(2, sizeof(struct ibv_qp *)); // [0]=left, [1]=right
-    if (!handle->qps) {
-        pg_close(handle);
-        fprintf(stderr, "Failed to allocate QP array\n");
-        return -1;
-    }
+    if (!handle->cq) return -1;
+    handle->qps = calloc(2, sizeof(struct ibv_qp *));
+    if (!handle->qps) return -1;
     struct ibv_qp_init_attr qp_init_attr = {
-            .send_cq = handle->cq,
-            .recv_cq = handle->cq,
-            .cap = {
-                    .max_send_wr = 16,
-                    .max_recv_wr = 16,
-                    .max_send_sge = 1,
-                    .max_recv_sge = 1,
-            },
-            .qp_type = IBV_QPT_RC, // Reliable Connection
+        .send_cq = handle->cq,
+        .recv_cq = handle->cq,
+        .cap = {
+            .max_send_wr = 16,
+            .max_recv_wr = 16,
+            .max_send_sge = 1,
+            .max_recv_sge = 1,
+        },
+        .qp_type = IBV_QPT_RC,
     };
     for (int i = 0; i < 2; ++i) {
         handle->qps[i] = ibv_create_qp(handle->pd, &qp_init_attr);
-        if (!handle->qps[i]) {
-            pg_close(handle);
-            fprintf(stderr, "Failed to create QP %d\n", i);
-            // Cleanup omitted for brevity
-            return -1;
-        }
+        if (!handle->qps[i]) return -1;
     }
+    return 0;
+}
 
-    // Exchange QP info with neighbors
-
-    int left = (handle->rank - 1 + handle->num_servers) % handle->num_servers;
-    int right = (handle->rank + 1) % handle->num_servers;
-
-    // Gather local QP info
+// Helper: Exchange QP info with neighbors
+static int exchange_qp_info(PGHandle *handle, qp_info_t myinfo[2], qp_info_t *left_info, qp_info_t *right_info) {
     struct ibv_port_attr port_attr;
-    ibv_query_port(handle->ctx, 1, &port_attr);  // 1 is the port number of the RDMA device
-    qp_info_t myinfo[2]; // holds the QP information for your own process.
-    // myinfo[0] is the left QP (QP you use to communicate with your left neighbor), myinfo[1] is the right QP (QP you use to communicate with your right neighbor)
-    // Loop through the two QPs (left and right) and set the LID, QPN, and PSN
+    ibv_query_port(handle->ctx, 1, &port_attr);
     for (int i = 0; i < 2; ++i) {
         myinfo[i].lid = port_attr.lid;
         myinfo[i].qpn = handle->qps[i]->qp_num;
-        myinfo[i].psn = 100 + handle->rank * 10 + i; // Rank-based unique PSNs
+        myinfo[i].psn = 100 + handle->rank * 10 + i;
     }
-
-
-    int sock_left;
-    int sock_right;
-    qp_info_t right_info;
-    qp_info_t left_info;
-
+    int left = (handle->rank - 1 + handle->num_servers) % handle->num_servers;
+    int right = (handle->rank + 1) % handle->num_servers;
+    int sock_left, sock_right;
     if (handle->rank == 0) {
-        // Rank 0: connect first, then accept  (to avoid deadlock)
         sock_right = tcp_connect(handle->servernames[right], QP_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->num_servers));
-        if (sock_right < 0) {
-            pg_close(handle);
-            perror("tcp_connect right");
-            return -1;
-        }
+        if (sock_right < 0) return -1;
         write(sock_right, &myinfo[1], sizeof(qp_info_t));
-        read(sock_right, &right_info, sizeof(qp_info_t));
+        read(sock_right, right_info, sizeof(qp_info_t));
         close(sock_right);
-
         sock_left = tcp_listen_accept(QP_EXCHANGE_PORT_BASE + handle->rank);
-        if (sock_left < 0) {
-            pg_close(handle);
-            perror("tcp_listen_accept left");
-            return -1;
-        }
-        read(sock_left, &left_info, sizeof(qp_info_t));
+        if (sock_left < 0) return -1;
+        read(sock_left, left_info, sizeof(qp_info_t));
         write(sock_left, &myinfo[0], sizeof(qp_info_t));
         close(sock_left);
     } else {
-        // All other ranks: accept first, then connect
-        int sock_left = tcp_listen_accept(QP_EXCHANGE_PORT_BASE + handle->rank);
-        if (sock_left < 0) {
-            pg_close(handle);
-            perror("tcp_listen_accept left");
-            return -1;
-        }
-        read(sock_left, &left_info, sizeof(qp_info_t));
+        sock_left = tcp_listen_accept(QP_EXCHANGE_PORT_BASE + handle->rank);
+        if (sock_left < 0) return -1;
+        read(sock_left, left_info, sizeof(qp_info_t));
         write(sock_left, &myinfo[0], sizeof(qp_info_t));
         close(sock_left);
-
         sock_right = tcp_connect(handle->servernames[right], QP_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->num_servers));
-        if (sock_right < 0) {
-            pg_close(handle);
-            perror("tcp_connect right");
-            return -1;
-        }
+        if (sock_right < 0) return -1;
         write(sock_right, &myinfo[1], sizeof(qp_info_t));
-        read(sock_right, &right_info, sizeof(qp_info_t));
+        read(sock_right, right_info, sizeof(qp_info_t));
         close(sock_right);
     }
+    return 0;
+}
 
-
-    // 4. Allocate and register buffer
-    handle->bufsize = RDMA_BUFFER_SIZE; // was originally 4096
+// Helper: Register send/recv buffers
+static int register_buffers(PGHandle *handle) {
+    handle->bufsize = RDMA_BUFFER_SIZE;
     handle->sendbuf = malloc(handle->bufsize);
-    if (!handle->sendbuf) {
-        pg_close(handle);
-        fprintf(stderr, "Failed to allocate sendbuf\n");
-        return -1;
-    }
+    if (!handle->sendbuf) return -1;
     handle->mr_send = ibv_reg_mr(
-            handle->pd,
-            handle->sendbuf,
-            handle->bufsize,
-            IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ
+        handle->pd,
+        handle->sendbuf,
+        handle->bufsize,
+        IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ
     );
-    if (!handle->mr_send) {
-        pg_close(handle);
-        fprintf(stderr, "Failed to register memory region\n");
-        return -1;
-    }
+    if (!handle->mr_send) return -1;
     handle->local_rkey = handle->mr_send->rkey;
     handle->local_addr = (uintptr_t)handle->sendbuf;
-
-    // 4.5. Allocate and register recvbuf
     handle->recvbuf = malloc(handle->bufsize);
-    if (!handle->recvbuf) {
-        pg_close(handle);
-        fprintf(stderr, "Failed to allocate recvbuf\n");
-        return -1;
-    }
+    if (!handle->recvbuf) return -1;
     handle->mr_recv = ibv_reg_mr(
-            handle->pd,
-            handle->recvbuf,
-            handle->bufsize,
-            IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ
+        handle->pd,
+        handle->recvbuf,
+        handle->bufsize,
+        IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ
     );
-    if (!handle->mr_recv) {
-        pg_close(handle);
-        fprintf(stderr, "Failed to register recvbuf memory region\n");
-        return -1;
+    if (!handle->mr_recv) return -1;
+    return 0;
+}
+
+// Helper: Exchange memory region info
+static int exchange_mr_info(PGHandle *handle) {
+    // Calculate left and right neighbor indices in the ring
+    int left = (handle->rank - 1 + handle->num_servers) % handle->num_servers;
+    int right = (handle->rank + 1) % handle->num_servers;
+
+    // Prepare my memory region info to send
+    mr_info_t my_mrinfo, right_mrinfo, left_mrinfo;
+    my_mrinfo.rkey = handle->mr_recv->rkey;
+    my_mrinfo.addr = (uintptr_t)handle->recvbuf;
+
+    int sock_left, sock_right;
+
+    // Rank 0: connect to right neighbor first, then accept from left
+    // Other ranks: accept from left first, then connect to right
+    if (handle->rank == 0) {
+        // Connect to right neighbor and exchange MR info
+        sock_right = tcp_connect(handle->servernames[right], MR_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->num_servers));
+        if (sock_right < 0) return -1;
+        // Send my MR info, receive right neighbor's MR info
+        write(sock_right, &my_mrinfo, sizeof(mr_info_t));
+        read(sock_right, &right_mrinfo, sizeof(mr_info_t));
+        close(sock_right);
+        // Store right neighbor's MR info
+        handle->remote_rkeys[right] = right_mrinfo.rkey;
+        handle->remote_addrs[right] = right_mrinfo.addr;
+
+        // Accept connection from left neighbor and exchange MR info
+        sock_left = tcp_listen_accept(MR_EXCHANGE_PORT_BASE + handle->rank);
+        if (sock_left < 0) return -1;
+        // Receive left neighbor's MR info, send my MR info
+        read(sock_left, &left_mrinfo, sizeof(mr_info_t));
+        write(sock_left, &my_mrinfo, sizeof(mr_info_t));
+        close(sock_left);
+        // Store left neighbor's MR info
+        handle->remote_rkeys[left] = left_mrinfo.rkey;
+        handle->remote_addrs[left] = left_mrinfo.addr;
+    } else {
+        // Accept connection from left neighbor and exchange MR info
+        sock_left = tcp_listen_accept(MR_EXCHANGE_PORT_BASE + handle->rank);
+        if (sock_left < 0) return -1;
+        // Receive left neighbor's MR info, send my MR info
+        read(sock_left, &left_mrinfo, sizeof(mr_info_t));
+        write(sock_left, &my_mrinfo, sizeof(mr_info_t));
+        close(sock_left);
+        // Store left neighbor's MR info
+        handle->remote_rkeys[left] = left_mrinfo.rkey;
+        handle->remote_addrs[left] = left_mrinfo.addr;
+
+        // Connect to right neighbor and exchange MR info
+        sock_right = tcp_connect(handle->servernames[right], MR_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->num_servers));
+        if (sock_right < 0) return -1;
+        // Send my MR info, receive right neighbor's MR info
+        write(sock_right, &my_mrinfo, sizeof(mr_info_t));
+        read(sock_right, &right_mrinfo, sizeof(mr_info_t));
+        close(sock_right);
+        // Store right neighbor's MR info
+        handle->remote_rkeys[right] = right_mrinfo.rkey;
+        handle->remote_addrs[right] = right_mrinfo.addr;
     }
 
+    // Success
+    return 0;
+}
 
-    // For left QP (index 0)
+// Helper: Final resource check
+static int final_resource_check(PGHandle *handle) {
+    if (!handle->ctx || !handle->pd || !handle->cq || !handle->qps ||
+        !handle->mr_send || !handle->mr_recv || !handle->sendbuf || !handle->recvbuf ||
+        !handle->remote_rkeys || !handle->remote_addrs) {
+        return -1;
+    }
+    return 0;
+}
+
+int connect_process_group(char **server_list, int size, void **pg_handle, int rank) {
+    PGHandle *handle = allocate_pg_handle(server_list, size, rank);
+    if (!handle) {
+        for (int i = 0; i < size; ++i) free(server_list[i]);
+        free(server_list);
+        return -1;
+    }
+    *pg_handle = handle;
+    if (setup_rdma_resources(handle) != 0) {
+        pg_close(handle);
+        return -1;
+    }
+    qp_info_t myinfo[2], left_info, right_info;
+    if (exchange_qp_info(handle, myinfo, &left_info, &right_info) != 0) {
+        pg_close(handle);
+        return -1;
+    }
+    if (register_buffers(handle) != 0) {
+        pg_close(handle);
+        return -1;
+    }
     if (connect_qp(handle->qps[0], &myinfo[0], &left_info)) {
         pg_close(handle);
         fprintf(stderr, "Failed to connect left QP\n");
         return -1;
     }
-
-    // For right QP (index 1)
     if (connect_qp(handle->qps[1], &myinfo[1], &right_info)) {
         pg_close(handle);
         fprintf(stderr, "Failed to connect right QP\n");
         return -1;
     }
-
-    // Exchange memory region info (rkey, addr) with neighbors
-    mr_info_t my_mrinfo, right_mrinfo, left_mrinfo;
-    my_mrinfo.rkey = handle->mr_recv->rkey;
-    my_mrinfo.addr = (uintptr_t)handle->recvbuf;
-
-    if (handle->rank == 0){  // connect first, then accept
-        sock_right = tcp_connect(handle->servernames[right], MR_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->num_servers)); // Use a different port for MR exchange
-        if (sock_right < 0) {
-            pg_close(handle);
-            perror("tcp_connect right (MR)");
-            return -1;
-        }
-        write(sock_right, &my_mrinfo, sizeof(mr_info_t)); // Send our MR info
-        read(sock_right, &right_mrinfo, sizeof(mr_info_t)); // Receive right neighbor's MR info
-        close(sock_right);
-
-        handle->remote_rkeys[right] = right_mrinfo.rkey;
-        handle->remote_addrs[right] = right_mrinfo.addr;
-
-        sock_left = tcp_listen_accept(MR_EXCHANGE_PORT_BASE + handle->rank);
-        if (sock_left < 0) {
-            pg_close(handle);
-            perror("tcp_listen_accept left (MR)");
-            return -1;
-        }
-        read(sock_left, &left_mrinfo, sizeof(mr_info_t)); // Receive left neighbor's MR info
-        write(sock_left, &my_mrinfo, sizeof(mr_info_t));  // Send our MR info
-        close(sock_left);
-
-        handle->remote_rkeys[left] = left_mrinfo.rkey;
-        handle->remote_addrs[left] = left_mrinfo.addr;
+    if (exchange_mr_info(handle) != 0) {
+        pg_close(handle);
+        return -1;
     }
-    else{  // accept first, connect second
-        sock_left = tcp_listen_accept(MR_EXCHANGE_PORT_BASE + handle->rank);
-        if (sock_left < 0) {
-            pg_close(handle);
-            perror("tcp_listen_accept left (MR)");
-            return -1;
-        }
-        read(sock_left, &left_mrinfo, sizeof(mr_info_t)); // Receive left neighbor's MR info
-        write(sock_left, &my_mrinfo, sizeof(mr_info_t));  // Send our MR info
-        close(sock_left);
-
-        handle->remote_rkeys[left] = left_mrinfo.rkey;
-        handle->remote_addrs[left] = left_mrinfo.addr;
-
-        sock_right = tcp_connect(handle->servernames[right], MR_EXCHANGE_PORT_BASE + ((handle->rank + 1) % handle->num_servers)); // Use a different port for MR exchange
-        if (sock_right < 0) {
-            pg_close(handle);
-            perror("tcp_connect right (MR)");
-            return -1;
-        }
-        write(sock_right, &my_mrinfo, sizeof(mr_info_t)); // Send our MR info
-        read(sock_right, &right_mrinfo, sizeof(mr_info_t)); // Receive right neighbor's MR info
-        close(sock_right);
-
-        handle->remote_rkeys[right] = right_mrinfo.rkey;
-        handle->remote_addrs[right] = right_mrinfo.addr;
-    }
-
-    // Check all pointers
-    if (!handle->ctx || !handle->pd || !handle->cq || !handle->qps ||
-        !handle->mr_send || !handle->mr_recv || !handle->sendbuf || !handle->recvbuf ||
-        !handle->remote_rkeys || !handle->remote_addrs) {
+    if (final_resource_check(handle) != 0) {
         fprintf(stderr, "Resource allocation or registration failed\n");
         pg_close(handle);
         return -1;
