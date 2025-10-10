@@ -213,7 +213,7 @@ int main(int argc, char *argv[]) {
     PGHandle *pg_handle = (PGHandle *)pg_handle_void;
     
     int size = 4;
-    for (int i = 0; i < 20; i++) {
+    for (int i = 0; i < 30; i++) {
         size *= 2;
         printf("Rank %d: Testing vector size %d, INT, SUM...\n", rank, size);
         if (!test_case(pg_handle, size, INT, SUM)) {
