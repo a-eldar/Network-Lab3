@@ -1,25 +1,9 @@
 
 #include "pg_connect.h"
-static int page_size;
 
 
 ////////////////////////// Helpers //////////////////////////
-// Helper: Resolve hostname to IP address
-static char* get_ip_from_hostname(const char *hostname) {
-    struct addrinfo hints = {0}, *res;
-    hints.ai_family = AF_INET;  // IPv4 only
-    hints.ai_socktype = SOCK_STREAM;
 
-    if (getaddrinfo(hostname, NULL, &hints, &res) != 0) {
-        printf("[DEBUG] Failed to resolve hostname: %s\n", hostname);
-        return NULL;  // Failed to resolve
-    }
-
-    struct sockaddr_in* addr = (struct sockaddr_in*)res->ai_addr;
-    char *ip = strdup(inet_ntoa(addr->sin_addr));
-    freeaddrinfo(res);
-    return ip;
-}
 
 // Connect to a hostname:port, return socket fd
 static int tcp_connect(const char *hostname, int port) {
@@ -92,63 +76,6 @@ static int tcp_listen_accept(int port) {
 
 /////////////////////////// Main Functions //////////////////////////
 
-
-/**
- * @brief Parse a comma-separated list of hostnames or IP addresses into an array of strings
- * @param list: comma-separated list of hostnames or IP addresses (e.g. "server1,server2,server3")
- * @param out_names: pointer to pointer to array of strings that will be set to the array of strings
- * @param out_count: pointer to integer that will be set to the number of servers
- * @return 0 on success, -1 on failure
- */
-static int parse_server_list(const char *list, char ***out_names, int *out_count) {
-    if (!list || !out_names || !out_count) return -1;
-    // Count commas to determine number of servers
-    int count = 1;
-    for (const char *p = list; *p; ++p) if (*p == ',') ++count;
-    char **names = (char **)calloc(count, sizeof(char *));
-    if (!names) return -1;
-    char *copy = strdup(list);  // strdup duplicates the string pointed to by list
-    if (!copy) { free(names); return -1; }
-    int idx = 0;
-    char *token = strtok(copy, ",");
-    while (token && idx < count) {
-        names[idx++] = strdup(token);
-        token = strtok(NULL, ",");
-    }
-    free(copy);
-    *out_names = names;
-    *out_count = count;
-    return 0;
-}
-
-// // Helper to clean up all RDMA resources in pg_handle
-// /**
-//  * @brief Clean up all RDMA resources in the process group pg_handle
-//  * @param pg_handle: pointer to the process group pg_handle
-//  */
-// static void cleanup_pg_handle(PGHandle *pg_handle) {
-//     if (!pg_handle) return;
-//     if (pg_handle->mr_send) ibv_dereg_mr(pg_handle->mr_send);
-//     if (pg_handle->mr_recv) ibv_dereg_mr(pg_handle->mr_recv);
-//     if (pg_handle->sendbuf) free(pg_handle->sendbuf);
-//     if (pg_handle->recvbuf) free(pg_handle->recvbuf);
-//     if (pg_handle->qps) {
-//         for (int i = 0; i < 2; ++i) {
-//             if (pg_handle->qps[i]) ibv_destroy_qp(pg_handle->qps[i]);
-//         }
-//         free(pg_handle->qps);
-//     }
-//     if (pg_handle->cq) ibv_destroy_cq(pg_handle->cq);
-//     if (pg_handle->pd) ibv_dealloc_pd(pg_handle->pd);
-//     if (pg_handle->ctx) ibv_close_device(pg_handle->ctx);
-//     if (pg_handle->remote_rkeys) free(pg_handle->remote_rkeys);
-//     if (pg_handle->remote_addrs) free(pg_handle->remote_addrs);
-//     if (pg_handle->servernames) {
-//         for (int i = 0; i < pg_handle->num_servers; ++i) free(pg_handle->servernames[i]);
-//         free(pg_handle->servernames);
-//     }
-//     free(pg_handle);
-// }
 
 // Helper to transition a QP to RTR(ready to receive) and RTS(ready to send)
 /**
