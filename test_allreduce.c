@@ -30,13 +30,13 @@
 // Note: Each rank runs this program with a different rank number.
 
 /**
- * Convert the arguments to a server list (comma separated) and my index
+ * Convert the arguments to a server list and my index
  * @param argv
- * @param serverlist
- * @param myindex
+ * @param serverlist pointer to list of server names
+ * @param myindex pointer to my index
  * @return 0 if successful, -1 if error
  */
-int convert_args_to_serverlist(char *argv[], char **serverlist, int *myindex) {
+int convert_args_to_serverlist(char *argv[], char ***serverlist, int *myindex, int *num_servers) {
     // Initialize output parameters
     *serverlist = NULL;
     *myindex = -1;
@@ -49,36 +49,27 @@ int convert_args_to_serverlist(char *argv[], char **serverlist, int *myindex) {
         }
         else if (strcmp(argv[i], "-list") == 0) {
             // Count number of servers in list
-            int num_servers = 0;
+            *num_servers = 0;
             int j = i + 1;
             while (argv[j] != NULL && argv[j][0] != '-') {
-                num_servers++;
+                (*num_servers)++;
                 j++;
             }
-
-            // Allocate and build comma-separated list
-            size_t total_len = 0;
-            for (j = i + 1; j < i + 1 + num_servers; j++) {
-                total_len += strlen(argv[j]) + 1; // +1 for comma or null
+            
+            if (*num_servers == 0) {
+                return -1; // No servers provided
             }
 
-            *serverlist = malloc(total_len);
+            // Allocate memory for server list
+            *serverlist = malloc((*num_servers) * sizeof(char*));
             if (!*serverlist) {
                 return -1;
             }
 
-            char *ptr = *serverlist;
-            for (j = i + 1; j < i + 1 + num_servers; j++) {
-                int len = strlen(argv[j]);
-                memcpy(ptr, argv[j], len);
-                ptr += len;
-                if (j < i + num_servers) {
-                    *ptr = ',';
-                    ptr++;
-                }
+            // build list
+            for (int k = 0; k < *num_servers; k++) {
+                (*serverlist)[k] = argv[i + 1 + k];
             }
-            *ptr = '\0';
-            
             break;
         }
     }
@@ -202,9 +193,10 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    char *serverlist;
+    char **serverlist;
     int rank;
-    if (convert_args_to_serverlist(argv, &serverlist, &rank) != 0) {
+    int num_servers;
+    if (convert_args_to_serverlist(argv, &serverlist, &rank, &num_servers) != 0) {
         fprintf(stderr, "Usage: %s -myindex <rank> -list <server0> <server1> ...\n", argv[0]);
         return 1;
     }
@@ -212,7 +204,7 @@ int main(int argc, char *argv[]) {
     void *pg_handle_void = NULL;
 
     printf("Rank %d: Connecting to process group...\n", rank);
-    if (connect_process_group(serverlist, &pg_handle_void, rank) != 0) {
+    if (connect_process_group(serverlist, num_servers, &pg_handle_void, rank) != 0) {
         fprintf(stderr, "Rank %d: connect_process_group failed\n", rank);
         return 1;
     }

@@ -21,6 +21,7 @@ extern "C" {
  */
 
 #include "pg_handle.h"
+#include "pg_close.h"
 #include <stddef.h>
 
 /* Default base ports used for QP and MR exchanges over TCP.
@@ -42,16 +43,17 @@ extern "C" {
 /* Number of connection attempts used in TCP connection phase */
 #define PG_TCP_CONN_ATTEMPTS 20 
 
-/* Public API
- *
- * connect_process_group:
- *   servername: comma-separated list of hostnames or IPs (e.g. "host1,host2,host3")
- *   pg_handle: pointer to a void* that will be set to a newly allocated PGHandle*
- *   rank: rank of this process in the group (0 to size-1)
- *
- * Returns 0 on success, -1 on failure.
+/**
+ * @brief Connect processes in a ring and set up RDMA resources.
+ * This function initializes RDMA resources, connects to neighbors, and prepares the process group pg_handle
+ * @param server_list: array of server names (size 'size')
+ * @param size: number of servers in the server_list
+ * @param pg_handle: pointer to pointer to the process group pg_handle that will be allocated
+ * @param rank: the rank of this process in the server_list (0 to size-1)
+ * @return 0 on success, -1 on failure
+ * @note The caller is responsible for freeing the server_list and its contents after pg_close is called.
  */
-int connect_process_group(char *servername, void **pg_handle, int rank);
+int connect_process_group(char **server_list, int size, void **pg_handle, int rank);
 
 
 #ifdef __cplusplus
