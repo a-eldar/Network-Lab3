@@ -108,87 +108,94 @@ int pg_all_reduce(void* sendbuf, void* recvbuf, int count, DATATYPE datatype, OP
         return -1;
     }
     
-    // Phase 1: Reduce-scatter using ring algorithm
-    // Each server will accumulate values for its designated chunk
-    for (int step = 0; step < n - 1; step++) {
+    // Pipelined ring allreduce: interleave reduce-scatter and all-gather
+    // Total steps = 2*(n-1), combining both phases
+    // First (n-1) steps perform reduce-scatter
+    // Overlapping with all-gather that starts as chunks become ready
+    
+    for (int step = 0; step < 2 * (n - 1); step++) {
         memset(rdma_sendbuf, 0, pg_handle->bufsize);
         memset(rdma_recvbuf, 0, pg_handle->bufsize);
-        // Calculate which chunk to send/receive
-        int send_chunk_id = (idx - step + n) % n;
-        int recv_chunk_id = (idx - step - 1 + n) % n;
         
-        // Calculate offsets and sizes
-        size_t send_offset = send_chunk_id * chunk_size * dtype_size;
-        size_t recv_offset = recv_chunk_id * chunk_size * dtype_size;
+        int send_chunk_id, recv_chunk_id;
+        int send_count, recv_count;
+        size_t send_offset, recv_offset;
+        size_t send_bytes, recv_bytes;
+        int is_reduce_scatter = (step < n - 1);
         
-        int send_count = chunk_size;
-        int recv_count = chunk_size;
-        
-        // Handle remainder elements for last chunk
-        if (send_chunk_id == n - 1) {
-            send_count = chunk_size + remainder;
+        if (is_reduce_scatter) {
+            // Reduce-scatter phase (steps 0 to n-2)
+            send_chunk_id = (idx - step + n) % n;
+            recv_chunk_id = (idx - step - 1 + n) % n;
+            
+            // Calculate offsets and sizes
+            send_offset = send_chunk_id * chunk_size * dtype_size;
+            recv_offset = recv_chunk_id * chunk_size * dtype_size;
+            
+            send_count = chunk_size;
+            recv_count = chunk_size;
+            
+            // Handle remainder elements for last chunk
+            if (send_chunk_id == n - 1) {
+                send_count = chunk_size + remainder;
+            }
+            if (recv_chunk_id == n - 1) {
+                recv_count = chunk_size + remainder;
+            }
+            
+            send_bytes = send_count * dtype_size;
+            recv_bytes = recv_count * dtype_size;
+            
+            // Copy data to send buffer
+            memcpy(rdma_sendbuf, (char *)recvbuf + send_offset, send_bytes);
+            
+            // Transfer data
+            transfer_data_rendezvous(pg_handle, send_bytes);
+            
+            memcpy(temp_buf, rdma_recvbuf, recv_bytes);
+            
+            // Perform reduction operation
+            perform_operation((char *)recvbuf + recv_offset,
+                             temp_buf,
+                             recv_count,
+                             datatype,
+                             op);
+        } else {
+            // All-gather phase (steps n-1 to 2n-3)
+            // The pipelining benefit: start gathering as soon as chunks are reduced
+            int gather_step = step - (n - 1);
+            send_chunk_id = (idx - gather_step + n + 1) % n;
+            recv_chunk_id = (idx - gather_step + n) % n;
+            
+            // Calculate offsets and sizes
+            send_offset = send_chunk_id * chunk_size * dtype_size;
+            recv_offset = recv_chunk_id * chunk_size * dtype_size;
+            
+            send_count = chunk_size;
+            recv_count = chunk_size;
+            
+            // Handle remainder elements for last chunk
+            if (send_chunk_id == n - 1) {
+                send_count = chunk_size + remainder;
+            }
+            if (recv_chunk_id == n - 1) {
+                recv_count = chunk_size + remainder;
+            }
+            
+            send_bytes = send_count * dtype_size;
+            recv_bytes = recv_count * dtype_size;
+            
+            // Copy data to send buffer
+            memcpy(rdma_sendbuf, (char *)recvbuf + send_offset, send_bytes);
+            
+            // Transfer data
+            transfer_data_rendezvous(pg_handle, send_bytes);
+            
+            // Copy received chunk to result buffer
+            memcpy((char *)recvbuf + recv_offset, rdma_recvbuf, recv_bytes);
         }
-        if (recv_chunk_id == n - 1) {
-            recv_count = chunk_size + remainder;
-        }
-        
-        size_t send_bytes = send_count * dtype_size;
-        size_t recv_bytes = recv_count * dtype_size;
-        
-        // Copy data to send buffer
-        memcpy(rdma_sendbuf, (char *)recvbuf + send_offset, send_bytes);
-
-        
-        // Transfer data using selected method (rendezvous or eager)
-        transfer_data_rendezvous(pg_handle, send_bytes);
-
-        
-
-        memcpy(temp_buf, rdma_recvbuf, recv_bytes);
-        
-        // Perform reduction operation
-        perform_operation((char *)recvbuf + recv_offset,
-                         temp_buf,
-                         recv_count,
-                         datatype,
-                         op);
-    }
-
-    // Phase 2: All-gather using ring algorithm
-    // Each server broadcasts its chunk to all others
-    for (int step = 0; step < n - 1; step++) {
-        // Calculate which chunk to send/receive
-        int send_chunk_id = (idx - step + n + 1) % n;
-        int recv_chunk_id = (idx - step + n) % n;
-        
-        // Calculate offsets and sizes
-        size_t send_offset = send_chunk_id * chunk_size * dtype_size;
-        size_t recv_offset = recv_chunk_id * chunk_size * dtype_size;
-        
-        int send_count = chunk_size;
-        int recv_count = chunk_size;
-        
-        // Handle remainder elements for last chunk
-        if (send_chunk_id == n - 1) {
-            send_count = chunk_size + remainder;
-        }
-        if (recv_chunk_id == n - 1) {
-            recv_count = chunk_size + remainder;
-        }
-        
-        size_t send_bytes = send_count * dtype_size;
-        size_t recv_bytes = recv_count * dtype_size;
-        
-        // Copy data to send buffer
-        memcpy(rdma_sendbuf, (char *)recvbuf + send_offset, send_bytes);
-        
-        // Transfer data using selected method (rendezvous or eager)
-        transfer_data_rendezvous(pg_handle, send_bytes);
-        
-        // Copy received chunk to result buffer
-        memcpy((char *)recvbuf + recv_offset, rdma_recvbuf, recv_bytes);
-        
     }
     
+    free(temp_buf);
     return 0;
 }
